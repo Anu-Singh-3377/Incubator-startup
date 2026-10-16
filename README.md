@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # 🚀 Incubation Center - Learner Login & Database Guide
 
 Welcome! If you were wondering **"Where is the login page?"** and **"How do I connect a database?"**, this guide answers both questions in simple, plain English with zero confusing jargon.
@@ -142,3 +143,6 @@ if user:
 - **[`script.js`](file:///c:/Users/Anushka%20Singh/Desktop/reserch-p/basic/script.js)**: The browser logic that validates inputs and calls the backend API.
 - **[`server.py`](file:///c:/Users/Anushka%20Singh/Desktop/reserch-p/basic/server.py)**: The backend API and SQLite database server.
 - **`incubation.db`**: The SQLite database file created automatically when `server.py` runs.
+=======
+# Incubator-startup
+>>>>>>> ce62805f1d8ae283eaa9695240a20a17dd7f5a32
