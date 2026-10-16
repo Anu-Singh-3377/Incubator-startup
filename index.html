@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Incubation Center - Learner Login & Registration</title>
+    <!-- Link to our CSS styling file -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <!-- Main Container: Centers the login card on screen -->
+    <div class="page-wrapper">
+        
+        <!-- Left Side: Incubation Center Overview -->
+        <aside class="info-panel">
+            <div class="brand">
+                <span class="brand-badge">🚀 Innovation & Incubation Hub</span>
+                <h1>Campus Incubation Center</h1>
+                <p class="tagline">Empowering student innovators, researchers, and budding startups.</p>
+            </div>
+
+            <div class="benefits-list">
+                <div class="benefit-item">
+                    <span class="benefit-icon">💡</span>
+                    <div>
+                        <h3>Mentorship & Coaching</h3>
+                        <p>1-on-1 guidance from successful entrepreneurs and faculty.</p>
+                    </div>
+                </div>
+
+                <div class="benefit-item">
+                    <span class="benefit-icon">🔬</span>
+                    <div>
+                        <h3>Prototyping Labs</h3>
+                        <p>Access 3D printers, IoT kits, and software development tools.</p>
+                    </div>
+                </div>
+
+                <div class="benefit-item">
+                    <span class="benefit-icon">💰</span>
+                    <div>
+                        <h3>Seed Grant Support</h3>
+                        <p>Pitch for grants and incubation funding to launch your startup.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Database connection helper for learners -->
+            <div class="info-footer">
+                <p id="dbStatusBadge" class="db-badge">
+                    <span class="status-dot"></span> <span id="dbStatusText">Checking Database Server...</span>
+                </p>
+                <small class="db-hint">Run <code>python server.py</code> to connect local SQLite database.</small>
+            </div>
+        </aside>
+
+        <!-- Right Side: Forms Container (Login and Register) -->
+        <main class="login-panel">
+            <div class="login-card">
+                
+                <!-- Tab Buttons: Switch between "Sign In" and "Register" -->
+                <div class="tab-header">
+                    <button type="button" id="tabLoginBtn" class="tab-btn active">Sign In</button>
+                    <button type="button" id="tabRegisterBtn" class="tab-btn">Register New Learner</button>
+                </div>
+
+                <!-- Alert Message Box: Displays success or error feedback -->
+                <div id="alertBox" class="alert-box" style="display: none;" role="alert">
+                    <span id="alertIcon"></span>
+                    <span id="alertMessage"></span>
+                </div>
+
+                <!-- ========================================== -->
+                <!-- 1. LOGIN FORM (Email and Password)         -->
+                <!-- ========================================== -->
+                <form id="loginForm" novalidate>
+                    <div class="card-header">
+                        <h2>Welcome Back</h2>
+                        <p>Please enter your email and password to log in.</p>
+                    </div>
+
+                    <!-- Input 1: Email Address -->
+                    <div class="form-group">
+                        <label for="loginEmail">Email Address <span class="required">*</span></label>
+                        <div class="input-wrapper">
+                            <span class="input-icon">📧</span>
+                            <input 
+                                type="email" 
+                                id="loginEmail" 
+                                name="email" 
+                                class="form-control" 
+                                placeholder="name@campus.edu" 
+                                autocomplete="email"
+                                required
+                            >
+                        </div>
+                        <span id="loginEmailError" class="field-error"></span>
+                    </div>
+
+                    <!-- Input 2: Password with Show/Hide toggle -->
+                    <div class="form-group">
+                        <div class="label-row">
+                            <label for="loginPassword">Password <span class="required">*</span></label>
+                            <a href="#" id="forgotPasswordLink" class="text-link">Forgot password?</a>
+                        </div>
+                        <div class="input-wrapper">
+                            <span class="input-icon">🔒</span>
+                            <input 
+                                type="password" 
+                                id="loginPassword" 
+                                name="password" 
+                                class="form-control" 
+                                placeholder="Enter your password" 
+                                autocomplete="current-password"
+                                required
+                            >
+                            <button type="button" id="toggleLoginPasswordBtn" class="toggle-password-btn" aria-label="Show password">
+                                👁️
+                            </button>
+                        </div>
+                        <span id="loginPasswordError" class="field-error"></span>
+                    </div>
+
+                    <!-- Remember Me Option -->
+                    <div class="form-row-checkbox">
+                        <label class="checkbox-container">
+                            <input type="checkbox" id="rememberMe" name="rememberMe">
+                            <span class="checkmark"></span>
+                            Remember me on this computer
+                        </label>
+                    </div>
+
+                    <!-- Submit Button -->
+                    <button type="submit" id="loginSubmitBtn" class="btn btn-primary">
+                        <span id="loginBtnText">Sign In to Dashboard</span>
+                        <span id="loginBtnLoader" class="loader" style="display: none;"></span>
+                    </button>
+
+                    <!-- Quick 1-Click Demo Fill Button -->
+                    <button type="button" id="demoFillBtn" class="btn btn-secondary">
+                        ⚡ Auto-Fill Demo Credentials (student@campus.edu)
+                    </button>
+                </form>
+
+                <!-- ========================================== -->
+                <!-- 2. REGISTRATION FORM (Save to Database)   -->
+                <!-- ========================================== -->
+                <form id="registerForm" style="display: none;" novalidate>
+                    <div class="card-header">
+                        <h2>Create Learner Account</h2>
+                        <p>Fill out this form to register into the incubation database.</p>
+                    </div>
+
+                    <!-- Full Name -->
+                    <div class="form-group">
+                        <label for="regName">Full Name <span class="required">*</span></label>
+                        <div class="input-wrapper">
+                            <span class="input-icon">👤</span>
+                            <input 
+                                type="text" 
+                                id="regName" 
+                                name="name" 
+                                class="form-control" 
+                                placeholder="e.g. Alex Johnson" 
+                                required
+                            >
+                        </div>
+                        <span id="regNameError" class="field-error"></span>
+                    </div>
+
+                    <!-- Email Address -->
+                    <div class="form-group">
+                        <label for="regEmail">Email Address <span class="required">*</span></label>
+                        <div class="input-wrapper">
+                            <span class="input-icon">📧</span>
+                            <input 
+                                type="email" 
+                                id="regEmail" 
+                                name="email" 
+                                class="form-control" 
+                                placeholder="name@campus.edu" 
+                                required
+                            >
+                        </div>
+                        <span id="regEmailError" class="field-error"></span>
+                    </div>
+
+                    <!-- Role Dropdown -->
+                    <div class="form-group">
+                        <label for="regRole">Role in Incubation Center</label>
+                        <select id="regRole" name="role" class="form-control">
+                            <option value="Student Innovator">Student Innovator / Learner</option>
+                            <option value="Startup Founder">Student Startup Founder</option>
+                            <option value="Faculty / Mentor">Faculty / Mentor</option>
+                        </select>
+                    </div>
+
+                    <!-- Password -->
+                    <div class="form-group">
+                        <label for="regPassword">Password <span class="required">*</span></label>
+                        <div class="input-wrapper">
+                            <span class="input-icon">🔒</span>
+                            <input 
+                                type="password" 
+                                id="regPassword" 
+                                name="password" 
+                                class="form-control" 
+                                placeholder="Create a password (min 6 characters)" 
+                                required
+                            >
+                            <button type="button" id="toggleRegPasswordBtn" class="toggle-password-btn" aria-label="Show password">
+                                👁️
+                            </button>
+                        </div>
+                        <span id="regPasswordError" class="field-error"></span>
+                    </div>
+
+                    <!-- Register Button -->
+                    <button type="submit" id="registerSubmitBtn" class="btn btn-primary">
+                        <span id="regBtnText">Register & Save in Database</span>
+                        <span id="regBtnLoader" class="loader" style="display: none;"></span>
+                    </button>
+                </form>
+
+            </div>
+        </main>
+
+    </div>
+
+    <!-- Link to our JavaScript file for interactive logic and API calls -->
+    <script src="script.js"></script>
+</body>
+</html>
