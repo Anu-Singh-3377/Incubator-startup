@@ -17,15 +17,73 @@ export const supabase = isSupabaseConfigured
   : null;
 
 // Initial pre-seeded mock database for zero-config evaluation
-const MOCK_STARTUPS = [
+const DEFAULT_COMPLIANCE_DOCS = [
+  {
+    id: 'doc_01',
+    document_type: 'Certificate of Incorporation',
+    document_name: 'Certificate of Incorporation (MCA / RoC)',
+    mandatory: true,
+    status: 'Verified',
+    uploaded_at: '2026-01-20T10:00:00Z',
+    file_name: 'COI_Certificate_RoC_Delhi.pdf',
+    notes: 'Verified against MCA21 master registry.'
+  },
+  {
+    id: 'doc_02',
+    document_type: 'MCA Registration',
+    document_name: 'MoA & AoA (Charter Documents)',
+    mandatory: true,
+    status: 'Verified',
+    uploaded_at: '2026-01-22T14:30:00Z',
+    file_name: 'MoA_AoA_Signed_Copies.pdf',
+    notes: 'Director shareholding matches cap table.'
+  },
+  {
+    id: 'doc_03',
+    document_type: 'PAN / Tax ID',
+    document_name: 'Company PAN & GST Registration',
+    mandatory: true,
+    status: 'Verified',
+    uploaded_at: '2026-02-05T09:15:00Z',
+    file_name: 'PAN_GSTIN_TaxCert.pdf',
+    notes: 'GSTIN active on CBIC portal.'
+  },
+  {
+    id: 'doc_04',
+    document_type: 'DPIIT Certificate',
+    document_name: 'DPIIT Startup Recognition Certificate',
+    mandatory: false,
+    status: 'Verified',
+    uploaded_at: '2026-02-18T16:00:00Z',
+    file_name: 'DPIIT_Recognition_Cert.pdf',
+    notes: 'Eligible for Section 80-IAC tax holiday & SISFS.'
+  },
+  {
+    id: 'doc_05',
+    document_type: 'Audited UC',
+    document_name: 'Audited Utilization Certificate (UC) - Tranche 1',
+    mandatory: true,
+    status: 'Under Review',
+    uploaded_at: '2026-10-14T11:45:00Z',
+    file_name: 'UC_Tranche1_CA_Certified.pdf',
+    notes: 'Submitted for verification by incubation audit committee.'
+  }
+];
+
+let localStartupsCache = [
   {
     id: 'st_01',
     startup_name: 'KisanSetu DeepTech Labs',
     legal_name: 'KisanSetu Innovations Private Limited',
     dpiit_number: 'DIPP-IN-98214',
+    mca_number: 'U72900DL2025PTC384910',
+    incorporation_date: '2025-04-18',
+    incorporation_status: 'Incorporated (Pvt Ltd)',
     sector: 'AgriTech & Edge AI',
     cohort: 'Cohort 12 (Spring 2026)',
     stage: 'Incubated',
+    status: 'Active',
+    company_overview: 'Autonomous precision edge sensors and satellite telemetry designed to optimize crop yield and water usage for Indian smallholder farmers.',
     founder_name: 'Aarav Sharma',
     founder_email: 'founder@venturebharat.in',
     founder_phone: '+91 98765 43210',
@@ -36,48 +94,86 @@ const MOCK_STARTUPS = [
     assigned_mentor: 'Dr. Radhika Iyer (IIT Bombay Alum)',
     lab_access: 'IoT Cleanroom Bay 4B & 3D Prototyping',
     milestone_progress: 55,
-    milestones: [
-      { id: 'm1', name: 'Ideation & Due Diligence', status: 'Completed', date: 'Jan 2026' },
-      { id: 'm2', name: 'Sensor Hardware Prototyping', status: 'In Progress', date: 'April 2026' },
-      { id: 'm3', name: 'Field Pilot in Maharashtra Farms', status: 'Upcoming', date: 'July 2026' },
-      { id: 'm4', name: 'Tranche 2 Grant Review', status: 'Upcoming', date: 'Sept 2026' }
-    ]
+    created_at: '2026-01-15T10:00:00Z',
+    documents: DEFAULT_COMPLIANCE_DOCS
   },
   {
     id: 'st_02',
     startup_name: 'NeuraMed Diagnostics',
     legal_name: 'NeuraMed BioTechnologies Pvt Ltd',
     dpiit_number: 'DIPP-IN-11203',
+    mca_number: 'U73100KA2025PTC412093',
+    incorporation_date: '2025-06-22',
+    incorporation_status: 'Incorporated (Pvt Ltd)',
     sector: 'HealthTech & BioSensors',
     cohort: 'Cohort 12 (Spring 2026)',
     stage: 'Incubated',
+    status: 'Active',
+    company_overview: 'Point-of-care rapid blood diagnostic microfluidics device delivering complete CBC and biochemistry reports in under 12 minutes in remote healthcare facilities.',
     founder_name: 'Dr. Priya Varma',
     founder_email: 'priya@neuramed.in',
     founder_phone: '+91 98111 44552',
+    pitch_deck_url: 'https://example.com/pitch/neuramed.pdf',
     sanctioned_grant: 3000000,
     disbursed_grant: 1500000,
     grant_scheme: 'DST NIDHI-PRAYAS',
     assigned_mentor: 'Prof. S. K. Ramanathan',
     lab_access: 'Biotech Wet Lab Suite 2',
-    milestone_progress: 70
+    milestone_progress: 70,
+    created_at: '2026-02-01T12:00:00Z',
+    documents: DEFAULT_COMPLIANCE_DOCS.map((d, i) => i === 4 ? { ...d, status: 'Verified' } : d)
   },
   {
     id: 'st_03',
     startup_name: 'ChargeBharat EV Grid',
     legal_name: 'ChargeBharat Mobility Pvt Ltd',
     dpiit_number: 'DIPP-IN-09843',
+    mca_number: 'U34100MH2024PTC390118',
+    incorporation_date: '2024-11-05',
+    incorporation_status: 'Incorporated (Pvt Ltd)',
     sector: 'CleanTech & Energy',
     cohort: 'Cohort 11 (Autumn 2025)',
     stage: 'Accelerated',
+    status: 'Active',
+    company_overview: 'Grid-resilient modular DC fast-charging stations integrated with local solar battery storage tailored for Tier-2 and Tier-3 Indian highway corridors.',
     founder_name: 'Ankit Deshmukh',
     founder_email: 'ankit@chargebharat.com',
     founder_phone: '+91 99345 67890',
+    pitch_deck_url: 'https://example.com/pitch/chargebharat.pdf',
     sanctioned_grant: 4500000,
     disbursed_grant: 3500000,
     grant_scheme: 'MeitY TIDE 2.0 & SISFS',
     assigned_mentor: 'Vikram Joshi (Angel Investor)',
     lab_access: 'High Voltage Power Lab',
-    milestone_progress: 85
+    milestone_progress: 85,
+    created_at: '2025-09-10T14:30:00Z',
+    documents: DEFAULT_COMPLIANCE_DOCS.map(d => ({ ...d, status: 'Verified' }))
+  },
+  {
+    id: 'st_04',
+    startup_name: 'DronaVimana Aerospace',
+    legal_name: 'DronaVimana Defense & Drone Systems Pvt Ltd',
+    dpiit_number: 'DIPP-IN-07421',
+    mca_number: 'U35300KA2023PTC368291',
+    incorporation_date: '2023-08-14',
+    incorporation_status: 'Incorporated (Pvt Ltd)',
+    sector: 'DeepTech & Aerospace',
+    cohort: 'Cohort 10 (Spring 2025)',
+    stage: 'Graduated',
+    status: 'Alumni',
+    company_overview: 'Long-range tethered UAV surveillance platforms for border security and disaster management. Successfully raised ₹18 Cr Series A post graduation from incubator.',
+    founder_name: 'Capt. Raghuveer Nair (Retd.)',
+    founder_email: 'raghu@dronavimana.in',
+    founder_phone: '+91 98450 11992',
+    pitch_deck_url: 'https://example.com/pitch/dronavimana.pdf',
+    sanctioned_grant: 5000000,
+    disbursed_grant: 5000000,
+    grant_scheme: 'DST NIDHI-EIR & SISFS',
+    assigned_mentor: 'Air Marshal S. Sen (Retd.)',
+    lab_access: 'Graduated (Honorary Lab Fellow)',
+    milestone_progress: 100,
+    created_at: '2025-01-20T09:00:00Z',
+    documents: DEFAULT_COMPLIANCE_DOCS.map(d => ({ ...d, status: 'Verified' }))
   }
 ];
 
@@ -352,28 +448,192 @@ export const supabaseService = {
     }
   },
 
-  // Startups List (for Admin Dashboard)
+  // Startups List (for Incubator Dashboard & Portfolio Management)
   async getStartups() {
     if (isSupabaseConfigured && supabase) {
-      const { data, error } = await supabase
-        .from('startups')
-        .select('*')
-        .order('created_at', { ascending: false });
+      try {
+        const { data, error } = await supabase
+          .from('startups')
+          .select('*')
+          .order('created_at', { ascending: false });
 
-      if (!error && data && data.length > 0) return data;
+        if (!error && Array.isArray(data)) {
+          // Map database records and attach default document checklist if missing
+          return data.map((item) => ({
+            ...item,
+            status: item.status || (item.stage === 'Graduated' ? 'Alumni' : 'Active'),
+            documents: item.documents || DEFAULT_COMPLIANCE_DOCS
+          }));
+        }
+      } catch (err) {
+        console.warn('[Supabase] Falling back to portfolio cache:', err.message);
+      }
     }
-    return MOCK_STARTUPS;
+    return localStartupsCache;
   },
 
-  // Applications List (for Admin Dashboard)
+  // Add Startup (Live Supabase insert with local state sync)
+  async addStartup(startupData) {
+    const formattedData = {
+      startup_name: startupData.startup_name.trim(),
+      legal_name: startupData.legal_name || `${startupData.startup_name} Private Limited`,
+      founder_name: startupData.founder_name.trim(),
+      founder_phone: startupData.founder_phone.trim(),
+      founder_email: startupData.founder_email ? startupData.founder_email.trim() : `founder@${startupData.startup_name.toLowerCase().replace(/[^a-z0-9]/g, '')}.in`,
+      company_overview: startupData.company_overview ? startupData.company_overview.trim() : 'Innovative startup in active incubation phase.',
+      sector: startupData.sector || 'DeepTech & AI',
+      status: startupData.status || 'Active',
+      stage: startupData.status === 'Alumni' ? 'Graduated' : (startupData.stage || 'Incubated'),
+      mca_number: startupData.mca_number ? startupData.mca_number.trim() : null,
+      incorporation_date: startupData.incorporation_date || null,
+      incorporation_status: startupData.incorporation_status || 'Incorporated (Pvt Ltd)',
+      dpiit_number: startupData.dpiit_number || `DIPP-IN-${Math.floor(10000 + Math.random() * 90000)}`,
+      cohort: startupData.cohort || 'Cohort 12 (Spring 2026)',
+      sanctioned_grant: Number(startupData.sanctioned_grant) || 2500000,
+      disbursed_grant: Number(startupData.disbursed_grant) || 0,
+      grant_scheme: startupData.grant_scheme || 'Startup India Seed Fund Scheme (SISFS)',
+      assigned_mentor: startupData.assigned_mentor || 'Mentorship Board Pending Allocation',
+      lab_access: startupData.lab_access || 'General Co-working & Hardware Bay',
+      milestone_progress: startupData.status === 'Alumni' ? 100 : 25,
+      created_at: new Date().toISOString()
+    };
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { data, error } = await supabase
+          .from('startups')
+          .insert([formattedData])
+          .select()
+          .single();
+
+        if (error) {
+          console.error('[Supabase Error] addStartup failed:', error);
+          throw error;
+        }
+
+        const enriched = {
+          ...data,
+          status: data.status || formattedData.status,
+          documents: DEFAULT_COMPLIANCE_DOCS
+        };
+        localStartupsCache = [enriched, ...localStartupsCache];
+        return { success: true, startup: enriched, isDatabase: true };
+      } catch (err) {
+        // If column error or permission error, throw with clear message
+        throw new Error(err.message || 'Database insert failed.');
+      }
+    }
+
+    // Demo Mode execution
+    const newEntry = {
+      ...formattedData,
+      id: `st_${Date.now()}`,
+      documents: DEFAULT_COMPLIANCE_DOCS
+    };
+    localStartupsCache = [newEntry, ...localStartupsCache];
+    return { success: true, startup: newEntry, isDatabase: false };
+  },
+
+  // Update Startup Record
+  async updateStartup(id, updatedFields) {
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { data, error } = await supabase
+          .from('startups')
+          .update({
+            ...updatedFields,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', id)
+          .select()
+          .single();
+
+        if (error) throw error;
+
+        localStartupsCache = localStartupsCache.map((s) => (s.id === id ? { ...s, ...data } : s));
+        return { success: true, startup: data, isDatabase: true };
+      } catch (err) {
+        throw new Error(err.message || 'Database update failed.');
+      }
+    }
+
+    // Demo Mode update
+    localStartupsCache = localStartupsCache.map((s) => {
+      if (s.id === id) {
+        return {
+          ...s,
+          ...updatedFields,
+          updated_at: new Date().toISOString()
+        };
+      }
+      return s;
+    });
+
+    const updated = localStartupsCache.find((s) => s.id === id);
+    return { success: true, startup: updated, isDatabase: false };
+  },
+
+  // Delete Startup Record
+  async deleteStartup(id) {
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { error } = await supabase
+          .from('startups')
+          .delete()
+          .eq('id', id);
+
+        if (error) throw error;
+      } catch (err) {
+        throw new Error(err.message || 'Database delete failed.');
+      }
+    }
+
+    localStartupsCache = localStartupsCache.filter((s) => s.id !== id);
+    return { success: true };
+  },
+
+  // Get Compliance Documents for a Startup
+  async getDocuments(startupId) {
+    const startup = localStartupsCache.find((s) => s.id === startupId);
+    return startup?.documents || DEFAULT_COMPLIANCE_DOCS;
+  },
+
+  // Update Compliance Document Status
+  async updateDocumentStatus(startupId, docId, newStatus, notes) {
+    localStartupsCache = localStartupsCache.map((s) => {
+      if (s.id === startupId) {
+        const updatedDocs = (s.documents || DEFAULT_COMPLIANCE_DOCS).map((d) => {
+          if (d.id === docId) {
+            return {
+              ...d,
+              status: newStatus,
+              verified_at: newStatus === 'Verified' ? new Date().toISOString() : d.verified_at,
+              notes: notes || d.notes
+            };
+          }
+          return d;
+        });
+        return { ...s, documents: updatedDocs };
+      }
+      return s;
+    });
+
+    return { success: true };
+  },
+
+  // Applications List (for Cohort Pipeline)
   async getApplications() {
     if (isSupabaseConfigured && supabase) {
-      const { data, error } = await supabase
-        .from('cohort_applications')
-        .select('*')
-        .order('submitted_at', { ascending: false });
+      try {
+        const { data, error } = await supabase
+          .from('cohort_applications')
+          .select('*')
+          .order('submitted_at', { ascending: false });
 
-      if (!error && data && data.length > 0) return data;
+        if (!error && Array.isArray(data) && data.length > 0) return data;
+      } catch (err) {
+        console.warn('Error reading cohort_applications:', err.message);
+      }
     }
     return MOCK_APPLICATIONS;
   },
@@ -394,20 +654,24 @@ export const supabaseService = {
     return { id, status: newStatus, review_notes: notes };
   },
 
-  // Announcements List (for both Dashboards)
+  // Announcements List
   async getAnnouncements() {
     if (isSupabaseConfigured && supabase) {
-      const { data, error } = await supabase
-        .from('incubation_announcements')
-        .select('*')
-        .order('created_at', { ascending: false });
+      try {
+        const { data, error } = await supabase
+          .from('incubation_announcements')
+          .select('*')
+          .order('created_at', { ascending: false });
 
-      if (!error && data && data.length > 0) return data;
+        if (!error && Array.isArray(data) && data.length > 0) return data;
+      } catch (err) {
+        console.warn('Error reading announcements:', err.message);
+      }
     }
     return MOCK_ANNOUNCEMENTS;
   },
 
-  // Post Announcement (Admin Dashboard)
+  // Post Announcement
   async postAnnouncement(title, content, category = 'Event', priority = 'normal') {
     if (isSupabaseConfigured && supabase) {
       const { data, error } = await supabase
@@ -430,4 +694,3 @@ export const supabaseService = {
     };
   }
 };
-
