@@ -10,10 +10,9 @@ import RegisterModal from './components/RegisterModal';
 import ForgotPasswordModal from './components/ForgotPasswordModal';
 import StartupDashboard from './components/StartupDashboard';
 import AdminDashboard from './components/AdminDashboard';
-import SupabaseGuideModal from './components/SupabaseGuideModal';
-import { supabaseService, isSupabaseConfigured } from './lib/supabaseClient';
+import { supabaseService } from './lib/supabaseClient';
 import { authApi } from './services/api';
-import { Lock, Smartphone, ShieldCheck, CheckCircle2, Database } from 'lucide-react';
+import { Lock, Smartphone, ShieldCheck, CheckCircle2 } from 'lucide-react';
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState(null);
@@ -37,7 +36,6 @@ export default function App() {
   // Modals
   const [isRegisterOpen, setIsRegisterOpen] = useState(false);
   const [isForgotOpen, setIsForgotOpen] = useState(false);
-  const [isGuideOpen, setIsGuideOpen] = useState(false);
 
   // Platform stats
   const [stats, setStats] = useState(null);
@@ -160,11 +158,6 @@ export default function App() {
           <AdminDashboard
             user={currentUser}
             onLogout={handleLogout}
-            onOpenGuide={() => setIsGuideOpen(true)}
-          />
-          <SupabaseGuideModal
-            isOpen={isGuideOpen}
-            onClose={() => setIsGuideOpen(false)}
           />
         </>
       );
@@ -176,11 +169,6 @@ export default function App() {
         <StartupDashboard
           user={currentUser}
           onLogout={handleLogout}
-          onOpenGuide={() => setIsGuideOpen(true)}
-        />
-        <SupabaseGuideModal
-          isOpen={isGuideOpen}
-          onClose={() => setIsGuideOpen(false)}
         />
       </>
     );
@@ -188,19 +176,18 @@ export default function App() {
 
   // ================= RENDER DUAL GATEWAY LOGIN PAGE =================
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col selection:bg-orange-500 selection:text-white">
+    <div className="min-h-screen bg-[#F6F8F4] text-slate-800 flex flex-col selection:bg-emerald-100 selection:text-emerald-950">
       {/* Top Navigation */}
       <Navbar
         onOpenRegister={() => setIsRegisterOpen(true)}
-        onOpenGuide={() => setIsGuideOpen(true)}
       />
 
       {/* Main Authentication & Showcase Area */}
-      <div className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12 flex items-center justify-center">
-        <div className="w-full grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center">
+      <div className="flex-1 w-full max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-10 py-5 sm:py-8 flex items-center">
+        <div className="w-full grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-10 items-stretch">
           
           {/* Left Column: Incubation Center Mission & Impact */}
-          <div className="lg:col-span-7">
+          <div className="order-2 lg:order-1 min-h-[320px] sm:min-h-[400px] lg:min-h-[680px]">
             <HeroSection
               stats={stats}
               onOpenRegister={() => setIsRegisterOpen(true)}
@@ -208,24 +195,25 @@ export default function App() {
           </div>
 
           {/* Right Column: Portal Authentication Card */}
-          <div className="lg:col-span-5">
-            <div className="glass-panel rounded-2xl p-6 sm:p-8 shadow-2xl relative overflow-hidden border border-slate-800">
-              {/* Subtle Tricolor Accent Indicator */}
-              <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-orange-500 via-white to-emerald-500" />
+          <div className="order-1 lg:order-2 flex items-center">
+            <div className="w-full bg-white rounded-3xl p-5 sm:p-7 lg:p-8 shadow-[0_12px_45px_rgba(37,55,43,0.08)] relative overflow-hidden border border-[#E4EAE2]">
 
               {/* Portal Header */}
-              <div className="mb-5">
+              <div className="mb-6">
                 <div className="flex items-center justify-between">
-                  <h2 className="text-xl font-black text-white tracking-tight">
-                    Portal Authentication
-                  </h2>
-                  <span className="flex items-center space-x-1 text-[11px] font-semibold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+                  <div>
+                    <p className="text-sm font-semibold text-emerald-700 mb-1">VentureBharat Portal</p>
+                    <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">
+                      Welcome back
+                    </h2>
+                  </div>
+                  <span className="flex items-center space-x-1.5 text-[11px] font-semibold text-emerald-800 bg-emerald-50 px-2.5 py-1.5 rounded-full border border-emerald-100">
                     <ShieldCheck className="w-3.5 h-3.5" />
-                    <span>Supabase RLS Enabled</span>
+                    <span>Secure access</span>
                   </span>
                 </div>
-                <p className="text-xs text-slate-400 mt-1">
-                  Single Sign-On for Startup Innovators & Incubation Center Administrators
+                <p className="text-sm text-slate-500 mt-2">
+                  Continue your startup journey with us.
                 </p>
               </div>
 
@@ -236,7 +224,7 @@ export default function App() {
               />
 
               {/* Login Method Tabs: Password vs Mobile OTP */}
-              <div className="flex rounded-lg bg-slate-950 p-1 mb-5 border border-slate-800 text-xs font-semibold">
+              <div className="flex rounded-xl bg-[#F4F7F3] p-1 mb-5 border border-[#E7ECE5] text-xs font-semibold">
                 <button
                   type="button"
                   onClick={() => {
@@ -245,12 +233,12 @@ export default function App() {
                   }}
                   className={`flex-1 py-2 rounded-md flex items-center justify-center space-x-2 transition ${
                     authMode === 'password'
-                      ? 'bg-slate-850 text-white shadow-sm border border-slate-700'
-                      : 'text-slate-400 hover:text-slate-200'
+                      ? 'bg-white text-slate-900 shadow-sm border border-slate-200'
+                      : 'text-slate-500 hover:text-slate-800'
                   }`}
                 >
                   <Lock className="w-3.5 h-3.5" />
-                  <span>Password Login (Supabase)</span>
+                  <span>Email &amp; Password</span>
                 </button>
                 <button
                   type="button"
@@ -260,8 +248,8 @@ export default function App() {
                   }}
                   className={`flex-1 py-2 rounded-md flex items-center justify-center space-x-2 transition ${
                     authMode === 'otp'
-                      ? 'bg-slate-850 text-white shadow-sm border border-slate-700'
-                      : 'text-slate-400 hover:text-slate-200'
+                      ? 'bg-white text-slate-900 shadow-sm border border-slate-200'
+                      : 'text-slate-500 hover:text-slate-800'
                   }`}
                 >
                   <Smartphone className="w-3.5 h-3.5" />
@@ -271,8 +259,8 @@ export default function App() {
 
               {/* Notification Message */}
               {successMsg && (
-                <div className="mb-4 p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-lg flex items-center space-x-2 text-xs text-emerald-300">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                <div className="mb-4 p-3 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center space-x-2 text-xs text-emerald-800">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                   <span>{successMsg}</span>
                 </div>
               )}
@@ -310,11 +298,11 @@ export default function App() {
               />
 
               {/* Registration Prompt Link */}
-              <div className="mt-5 pt-4 text-center border-t border-slate-800/80 text-xs text-slate-400">
+              <div className="mt-5 pt-4 text-center border-t border-slate-100 text-xs text-slate-500">
                 <span>New innovation venture? </span>
                 <button
                   onClick={() => setIsRegisterOpen(true)}
-                  className="text-orange-400 hover:text-orange-300 font-bold underline transition"
+                  className="text-emerald-700 hover:text-emerald-800 font-bold underline underline-offset-2 transition"
                 >
                   Apply for Incubation & Grants
                 </button>
@@ -342,10 +330,6 @@ export default function App() {
         onClose={() => setIsForgotOpen(false)}
       />
 
-      <SupabaseGuideModal
-        isOpen={isGuideOpen}
-        onClose={() => setIsGuideOpen(false)}
-      />
     </div>
   );
 }

@@ -16,15 +16,13 @@ import {
   Layers,
   Sparkles,
   ExternalLink,
-  HelpCircle,
-  Database,
   Building2,
   Check,
   CheckSquare
 } from 'lucide-react';
-import { supabaseService, isSupabaseConfigured } from '../lib/supabaseClient';
+import { supabaseService } from '../lib/supabaseClient';
 
-export default function StartupDashboard({ user, onLogout, onOpenGuide }) {
+export default function StartupDashboard({ user, onLogout }) {
   const [announcements, setAnnouncements] = useState([]);
   const [trancheModalOpen, setTrancheModalOpen] = useState(false);
   const [trancheSubmitted, setTrancheSubmitted] = useState(false);
@@ -80,19 +78,6 @@ export default function StartupDashboard({ user, onLogout, onOpenGuide }) {
             <Calendar className="w-3.5 h-3.5 text-emerald-600" />
             <span>{currentDateFormatted}</span>
           </div>
-
-          {/* Database indicator */}
-          <button
-            onClick={onOpenGuide}
-            className={`hidden sm:flex items-center space-x-1.5 px-2.5 py-1 rounded-full text-xs border font-mono ${
-              isSupabaseConfigured
-                ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
-                : 'bg-amber-50 border-amber-200 text-amber-700'
-            }`}
-          >
-            <Database className="w-3 h-3" />
-            <span>{isSupabaseConfigured ? 'Supabase Live' : 'Demo Mode'}</span>
-          </button>
 
           {/* User profile */}
           <div className="flex items-center space-x-2.5 pl-2 border-l border-slate-200">

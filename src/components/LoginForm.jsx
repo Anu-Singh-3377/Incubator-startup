@@ -23,15 +23,15 @@ export default function LoginForm({
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       {error && (
-        <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/30 flex items-start space-x-2.5 text-xs text-red-400">
-          <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+        <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 flex items-start space-x-2.5 text-xs text-rose-800">
+          <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
           <span>{error}</span>
         </div>
       )}
 
       {/* Email / Official Username */}
       <div>
-        <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+        <label className="block text-xs font-semibold text-slate-700 mb-1.5">
           Official Email Address
         </label>
         <div className="relative">
@@ -44,7 +44,7 @@ export default function LoginForm({
             onChange={(e) => setEmail(e.target.value)}
             required
             placeholder="e.g. founder@venturebharat.in"
-            className="w-full pl-9 pr-3.5 py-2.5 bg-slate-950/80 border border-slate-700/80 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition"
+            className="w-full pl-9 pr-3.5 py-3 bg-white border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-600/20 focus:border-emerald-600 transition"
           />
         </div>
       </div>
@@ -52,13 +52,13 @@ export default function LoginForm({
       {/* Password */}
       <div>
         <div className="flex items-center justify-between mb-1.5">
-          <label className="text-xs font-semibold text-slate-300">
+          <label className="text-xs font-semibold text-slate-700">
             Portal Password
           </label>
           <button
             type="button"
             onClick={onOpenForgot}
-            className="text-xs text-orange-400 hover:text-orange-300 font-medium transition"
+            className="text-xs text-emerald-700 hover:text-emerald-900 font-medium transition"
           >
             Forgot password?
           </button>
@@ -73,12 +73,12 @@ export default function LoginForm({
             onChange={(e) => setPassword(e.target.value)}
             required
             placeholder="••••••••••••"
-            className="w-full pl-9 pr-10 py-2.5 bg-slate-950/80 border border-slate-700/80 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition"
+            className="w-full pl-9 pr-10 py-3 bg-white border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-600/20 focus:border-emerald-600 transition"
           />
           <button
             type="button"
             onClick={() => setShowPassword(!showPassword)}
-            className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-200 transition"
+            className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-700 transition"
           >
             {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
           </button>
@@ -86,24 +86,24 @@ export default function LoginForm({
       </div>
 
       {/* Remember me & Security Info */}
-      <div className="flex items-center justify-between text-xs pt-1">
-        <label className="flex items-center space-x-2 text-slate-400 hover:text-slate-300 cursor-pointer">
+      <div className="flex flex-wrap items-center justify-between gap-2 text-xs pt-1">
+        <label className="flex items-center space-x-2 text-slate-500 hover:text-slate-700 cursor-pointer">
           <input
             type="checkbox"
             checked={rememberMe}
             onChange={(e) => setRememberMe(e.target.checked)}
-            className="w-4 h-4 rounded bg-slate-950 border-slate-700 text-orange-500 focus:ring-orange-500/30"
+            className="w-4 h-4 rounded border-slate-300 text-emerald-700 focus:ring-emerald-600/30"
           />
           <span>Remember login on this device</span>
         </label>
-        <span className="text-[11px] text-slate-500">256-bit Encrypted</span>
+        <span className="text-[11px] text-slate-400">Secure sign in</span>
       </div>
 
       {/* Submit Button */}
       <button
         type="submit"
         disabled={loading}
-        className="w-full mt-2 py-3 px-4 rounded-lg bg-gradient-to-r from-orange-600 via-amber-600 to-orange-600 hover:from-orange-500 hover:to-amber-500 text-white font-semibold text-sm shadow-lg shadow-orange-600/25 flex items-center justify-center space-x-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed transform active:scale-[0.99]"
+        className="w-full mt-2 py-3 px-4 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-semibold text-sm flex items-center justify-center space-x-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
       >
         {loading ? (
           <>

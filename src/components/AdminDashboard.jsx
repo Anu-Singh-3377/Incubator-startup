@@ -32,15 +32,15 @@ import {
   FolderKanban,
   FileCheck2,
   Send,
-  HelpCircle,
   Briefcase,
   Check,
   Layers,
-  ChevronDown
+  ChevronDown,
+  Menu
 } from 'lucide-react';
 import { supabaseService, isSupabaseConfigured } from '../lib/supabaseClient';
 
-export default function AdminDashboard({ user, onLogout, onOpenGuide }) {
+export default function AdminDashboard({ user, onLogout }) {
   // Navigation
   const [activeNav, setActiveNav] = useState('overview'); // 'overview' | 'portfolio' | 'add-startup' | 'documents' | 'applications'
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -354,7 +354,7 @@ export default function AdminDashboard({ user, onLogout, onOpenGuide }) {
       <div className="flex flex-1 overflow-hidden">
         
         {/* ================= SIDEBAR NAVIGATION ================= */}
-        <aside className="hidden lg:flex lg:flex-col w-64 bg-white border-r border-slate-200/90 shadow-sm shrink-0">
+        <aside className="hidden lg:flex lg:flex-col w-64 h-screen sticky top-0 bg-white border-r border-slate-200/90 shadow-sm shrink-0">
           {/* Logo & Incubator Identity */}
           <div className="p-5 border-b border-slate-100 flex items-center space-x-3">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-600 to-teal-700 flex items-center justify-center font-black text-white shadow-sm">
@@ -448,13 +448,6 @@ export default function AdminDashboard({ user, onLogout, onOpenGuide }) {
               )}
             </button>
 
-            <button
-              onClick={onOpenGuide}
-              className="w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-lg text-xs font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition"
-            >
-              <Database className="w-4 h-4 text-slate-500" />
-              <span>Database & Guide</span>
-            </button>
           </nav>
 
           {/* Database & Sync Status Footer Card */}
@@ -483,9 +476,11 @@ export default function AdminDashboard({ user, onLogout, onOpenGuide }) {
               {/* Mobile Menu Trigger */}
               <button
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                aria-label={mobileMenuOpen ? 'Close navigation menu' : 'Open navigation menu'}
+                aria-expanded={mobileMenuOpen}
                 className="lg:hidden p-2 rounded-lg text-slate-600 hover:bg-slate-100 border border-slate-200"
               >
-                <FolderKanban className="w-4 h-4" />
+                {mobileMenuOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
               </button>
 
               <div>
@@ -617,6 +612,13 @@ export default function AdminDashboard({ user, onLogout, onOpenGuide }) {
               >
                 <FolderKanban className="w-4 h-4 text-emerald-600" />
                 <span>Startup Portfolio</span>
+              </button>
+              <button
+                onClick={() => { handleOpenAdd(); setMobileMenuOpen(false); }}
+                className="w-full flex items-center space-x-2 p-2.5 rounded-lg text-emerald-700 hover:bg-emerald-50/70"
+              >
+                <PlusCircle className="w-4 h-4 text-emerald-600" />
+                <span>Add New Startup</span>
               </button>
               <button
                 onClick={() => { setActiveNav('documents'); setMobileMenuOpen(false); }}
@@ -1434,25 +1436,28 @@ export default function AdminDashboard({ user, onLogout, onOpenGuide }) {
 
       {/* ================= ADD / EDIT STARTUP FORM MODAL ================= */}
       {isFormModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs overflow-y-auto">
-          <div className="relative w-full max-w-xl bg-white border border-slate-200 rounded-2xl shadow-xl p-6 sm:p-8 my-8 text-slate-900 max-h-[90vh] overflow-y-auto">
-            
-            <button
-              onClick={() => setIsFormModalOpen(false)}
-              className="absolute top-5 right-5 p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100 transition"
-            >
-              <X className="w-5 h-5" />
-            </button>
-
-            <div className="mb-5">
-              <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                <Building2 className="w-5 h-5 text-emerald-600" />
-                <span>{editingStartupId ? 'Edit Startup Record' : 'Add New Startup to Portfolio'}</span>
-              </h3>
-              <p className="text-xs text-slate-500 mt-1">
-                Enter company incorporation details, founder contacts, and incubation status.
-              </p>
+        <div className="fixed inset-0 lg:left-64 z-50 bg-[#F8FAFC] overflow-y-auto">
+          <div className="min-h-full w-full bg-white text-slate-900">
+            <div className="sticky top-0 z-10 flex items-center justify-between gap-4 border-b border-slate-200 bg-white/95 px-5 py-4 backdrop-blur sm:px-8 lg:px-10">
+              <div>
+                <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                  <Building2 className="w-5 h-5 text-emerald-600" />
+                  <span>{editingStartupId ? 'Edit Startup Record' : 'Add New Startup to Portfolio'}</span>
+                </h3>
+                <p className="text-xs text-slate-500 mt-1">
+                  Enter company incorporation details, founder contacts, and incubation status.
+                </p>
+              </div>
+              <button
+                onClick={() => setIsFormModalOpen(false)}
+                aria-label="Close startup form"
+                className="shrink-0 p-2 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
             </div>
+
+            <div className="mx-auto w-full max-w-5xl px-5 py-6 sm:px-8 sm:py-8 lg:px-10">
 
             {formFeedback && (
               <div
@@ -1467,7 +1472,7 @@ export default function AdminDashboard({ user, onLogout, onOpenGuide }) {
               </div>
             )}
 
-            <form onSubmit={handleSaveStartup} className="space-y-4 text-xs">
+            <form onSubmit={handleSaveStartup} className="space-y-5 text-xs">
               
               {/* Row 1: Company Name & Founder Name */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -1677,6 +1682,7 @@ export default function AdminDashboard({ user, onLogout, onOpenGuide }) {
 
             </form>
 
+            </div>
           </div>
         </div>
       )}
