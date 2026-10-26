@@ -31,9 +31,21 @@ import {
   Check,
   ChevronDown,
   Menu,
-  ArrowLeft
+  ArrowLeft,
+  Gift,
+  Compass,
+  LifeBuoy,
+  Send,
+  MessageSquare,
+  HelpCircle
 } from 'lucide-react';
 import { supabaseService } from '../lib/supabaseClient';
+import InvestorDirectory from './InvestorDirectory';
+import MentorDirectory from './MentorDirectory';
+import VendorDirectory from './VendorDirectory';
+import CommunicationHub from './CommunicationHub';
+import GuidanceCenter from './GuidanceCenter';
+import SupportDesk from './SupportDesk';
 
 // ================= REUSABLE PAGINATION BAR COMPONENT =================
 function PaginationBar({
@@ -132,6 +144,13 @@ export default function AdminDashboard({ user, onLogout }) {
   const [appStatusFilter, setAppStatusFilter] = useState('All'); // 'All' | 'Under Review' | 'Interview Scheduled' | 'Accepted' | 'Rejected'
   const [appPage, setAppPage] = useState(1);
   const [appPageSize, setAppPageSize] = useState(10);
+
+  // Application Intake Evaluation Modal State
+  const [evalModalApp, setEvalModalApp] = useState(null);
+  const [evalScore, setEvalScore] = useState('8.5');
+  const [evalCohort, setEvalCohort] = useState('Cohort 12 (Spring 2026)');
+  const [evalNotes, setEvalNotes] = useState('');
+  const [evalSubmitting, setEvalSubmitting] = useState(false);
 
   // Selected Startup for Details Modal
   const [selectedStartup, setSelectedStartup] = useState(null);
@@ -374,12 +393,71 @@ export default function AdminDashboard({ user, onLogout }) {
   // Cohort Application status update
   const handleAppStatusChange = async (appId, newStatus) => {
     try {
-      await supabaseService.updateApplicationStatus(appId, newStatus, `Reviewed by ${user.full_name || 'Admin'}`);
+      await supabaseService.updateApplicationStatus(appId, newStatus, `Reviewed by ${user?.full_name || 'Admin'}`);
       setApplications((prev) =>
         prev.map((app) => (app.id === appId ? { ...app, status: newStatus } : app))
       );
     } catch (err) {
       alert('Error updating application: ' + err.message);
+    }
+  };
+
+  const handleOpenEvaluateApp = (app) => {
+    setEvalModalApp(app);
+    setEvalScore(app.eval_score || '8.5');
+    setEvalCohort(app.cohort || 'Cohort 12 (Spring 2026)');
+    setEvalNotes(app.review_notes || '');
+  };
+
+  const handleProcessApplication = async (newStatus) => {
+    if (!evalModalApp) return;
+    setEvalSubmitting(true);
+    try {
+      await supabaseService.updateApplicationDetails(evalModalApp.id, {
+        status: newStatus,
+        cohort: evalCohort,
+        eval_score: evalScore,
+        review_notes: evalNotes
+      });
+
+      setApplications((prev) =>
+        prev.map((a) =>
+          a.id === evalModalApp.id
+            ? { ...a, status: newStatus, cohort: evalCohort, eval_score: evalScore, review_notes: evalNotes }
+            : a
+        )
+      );
+
+      // If accepted, induct venture into the startup portfolio automatically
+      if (newStatus === 'Accepted') {
+        const existing = startups.find(
+          (s) => s.startup_name.toLowerCase() === evalModalApp.startup_name.toLowerCase()
+        );
+        if (!existing) {
+          const res = await supabaseService.addStartup({
+            startup_name: evalModalApp.startup_name,
+            founder_name: evalModalApp.founder_name,
+            founder_phone: evalModalApp.founder_phone,
+            founder_email: evalModalApp.founder_email || `${evalModalApp.founder_name.toLowerCase().replace(/\s+/g, '')}@startup.in`,
+            company_overview: evalModalApp.pitch_summary,
+            status: 'Active',
+            sector: evalModalApp.sector,
+            dpiit_number: evalModalApp.dpiit_number || 'DPIIT Pending',
+            cohort: evalCohort,
+            sanctioned_grant: '2500000',
+            disbursed_grant: '0'
+          });
+          if (res?.startup) {
+            setStartups((prev) => [res.startup, ...prev]);
+          }
+        }
+      }
+
+      setEvalModalApp(null);
+    } catch (err) {
+      alert('Error updating application: ' + err.message);
+    } finally {
+      setEvalSubmitting(false);
     }
   };
 
@@ -660,7 +738,47 @@ export default function AdminDashboard({ user, onLogout }) {
             </button>
 
             <div className="pt-4 px-3 pb-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">
-              Admissions &amp; System
+              Stakeholder Network
+            </div>
+
+            <button
+              onClick={() => setActiveNav('investors')}
+              className={`w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-lg text-xs font-medium transition ${
+                activeNav === 'investors'
+                  ? 'bg-emerald-50 text-emerald-800 font-bold border-l-4 border-emerald-600 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+              }`}
+            >
+              <TrendingUp className={`w-4 h-4 ${activeNav === 'investors' ? 'text-emerald-700' : 'text-slate-500'}`} />
+              <span>Investor Network</span>
+            </button>
+
+            <button
+              onClick={() => setActiveNav('mentors')}
+              className={`w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-lg text-xs font-medium transition ${
+                activeNav === 'mentors'
+                  ? 'bg-emerald-50 text-emerald-800 font-bold border-l-4 border-emerald-600 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+              }`}
+            >
+              <Users className={`w-4 h-4 ${activeNav === 'mentors' ? 'text-emerald-700' : 'text-slate-500'}`} />
+              <span>Mentor Directory</span>
+            </button>
+
+            <button
+              onClick={() => setActiveNav('vendors')}
+              className={`w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-lg text-xs font-medium transition ${
+                activeNav === 'vendors'
+                  ? 'bg-emerald-50 text-emerald-800 font-bold border-l-4 border-emerald-600 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+              }`}
+            >
+              <Gift className={`w-4 h-4 ${activeNav === 'vendors' ? 'text-emerald-700' : 'text-slate-500'}`} />
+              <span>Approved Vendors</span>
+            </button>
+
+            <div className="pt-4 px-3 pb-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+              Admissions &amp; Operations
             </div>
 
             <button
@@ -681,12 +799,48 @@ export default function AdminDashboard({ user, onLogout }) {
                 </span>
               )}
             </button>
+
+            <button
+              onClick={() => setActiveNav('communication')}
+              className={`w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-lg text-xs font-medium transition ${
+                activeNav === 'communication'
+                  ? 'bg-emerald-50 text-emerald-800 font-bold border-l-4 border-emerald-600 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+              }`}
+            >
+              <Send className={`w-4 h-4 ${activeNav === 'communication' ? 'text-emerald-700' : 'text-slate-500'}`} />
+              <span>Communication Hub</span>
+            </button>
+
+            <button
+              onClick={() => setActiveNav('guidance')}
+              className={`w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-lg text-xs font-medium transition ${
+                activeNav === 'guidance'
+                  ? 'bg-emerald-50 text-emerald-800 font-bold border-l-4 border-emerald-600 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+              }`}
+            >
+              <Compass className={`w-4 h-4 ${activeNav === 'guidance' ? 'text-emerald-700' : 'text-slate-500'}`} />
+              <span>Guidance Center</span>
+            </button>
+
+            <button
+              onClick={() => setActiveNav('support')}
+              className={`w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-lg text-xs font-medium transition ${
+                activeNav === 'support'
+                  ? 'bg-emerald-50 text-emerald-800 font-bold border-l-4 border-emerald-600 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+              }`}
+            >
+              <LifeBuoy className={`w-4 h-4 ${activeNav === 'support' ? 'text-emerald-700' : 'text-slate-500'}`} />
+              <span>Support Requests</span>
+            </button>
           </nav>
         </aside>
 
         {/* Mobile Navigation Drawer */}
         {mobileMenuOpen && (
-          <div className="lg:hidden absolute top-0 left-0 right-0 z-30 bg-white border-b border-slate-200 p-4 space-y-2 text-xs shadow-lg">
+          <div className="lg:hidden absolute top-0 left-0 right-0 z-30 bg-white border-b border-slate-200 p-4 space-y-2 text-xs shadow-lg max-h-[80vh] overflow-y-auto">
             <button
               onClick={() => { setActiveNav('overview'); setMobileMenuOpen(false); }}
               className={`w-full flex items-center space-x-2 p-2.5 rounded-lg ${activeNav === 'overview' ? 'bg-emerald-50 text-emerald-800 font-bold' : 'text-slate-600'}`}
@@ -716,11 +870,53 @@ export default function AdminDashboard({ user, onLogout }) {
               <span>Documents &amp; Compliance</span>
             </button>
             <button
+              onClick={() => { setActiveNav('investors'); setMobileMenuOpen(false); }}
+              className={`w-full flex items-center space-x-2 p-2.5 rounded-lg ${activeNav === 'investors' ? 'bg-emerald-50 text-emerald-800 font-bold' : 'text-slate-600'}`}
+            >
+              <TrendingUp className="w-4 h-4 text-emerald-600" />
+              <span>Investor Network</span>
+            </button>
+            <button
+              onClick={() => { setActiveNav('mentors'); setMobileMenuOpen(false); }}
+              className={`w-full flex items-center space-x-2 p-2.5 rounded-lg ${activeNav === 'mentors' ? 'bg-emerald-50 text-emerald-800 font-bold' : 'text-slate-600'}`}
+            >
+              <Users className="w-4 h-4 text-emerald-600" />
+              <span>Mentor Directory</span>
+            </button>
+            <button
+              onClick={() => { setActiveNav('vendors'); setMobileMenuOpen(false); }}
+              className={`w-full flex items-center space-x-2 p-2.5 rounded-lg ${activeNav === 'vendors' ? 'bg-emerald-50 text-emerald-800 font-bold' : 'text-slate-600'}`}
+            >
+              <Gift className="w-4 h-4 text-emerald-600" />
+              <span>Approved Vendors</span>
+            </button>
+            <button
               onClick={() => { setActiveNav('applications'); setMobileMenuOpen(false); }}
               className={`w-full flex items-center space-x-2 p-2.5 rounded-lg ${activeNav === 'applications' ? 'bg-emerald-50 text-emerald-800 font-bold' : 'text-slate-600'}`}
             >
               <FileText className="w-4 h-4 text-emerald-600" />
               <span>Cohort Applications</span>
+            </button>
+            <button
+              onClick={() => { setActiveNav('communication'); setMobileMenuOpen(false); }}
+              className={`w-full flex items-center space-x-2 p-2.5 rounded-lg ${activeNav === 'communication' ? 'bg-emerald-50 text-emerald-800 font-bold' : 'text-slate-600'}`}
+            >
+              <Send className="w-4 h-4 text-emerald-600" />
+              <span>Communication Hub</span>
+            </button>
+            <button
+              onClick={() => { setActiveNav('guidance'); setMobileMenuOpen(false); }}
+              className={`w-full flex items-center space-x-2 p-2.5 rounded-lg ${activeNav === 'guidance' ? 'bg-emerald-50 text-emerald-800 font-bold' : 'text-slate-600'}`}
+            >
+              <Compass className="w-4 h-4 text-emerald-600" />
+              <span>Guidance Center</span>
+            </button>
+            <button
+              onClick={() => { setActiveNav('support'); setMobileMenuOpen(false); }}
+              className={`w-full flex items-center space-x-2 p-2.5 rounded-lg ${activeNav === 'support' ? 'bg-emerald-50 text-emerald-800 font-bold' : 'text-slate-600'}`}
+            >
+              <LifeBuoy className="w-4 h-4 text-emerald-600" />
+              <span>Support Requests</span>
             </button>
           </div>
         )}
@@ -729,8 +925,8 @@ export default function AdminDashboard({ user, onLogout }) {
         <main className="flex-1 min-w-0 h-full overflow-y-auto bg-[#F8FAFC]">
           <div className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl w-full mx-auto">
 
-            {/* ================= OVERVIEW CARDS (Visible on Overview & Portfolio) ================= */}
-            {activeNav !== 'add-startup' && (
+            {/* ================= OVERVIEW CARDS (Visible on Overview & Portfolio & Applications) ================= */}
+            {['overview', 'portfolio', 'documents', 'applications'].includes(activeNav) && (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 
                 {/* 1. Total Startups Card */}
@@ -1708,6 +1904,12 @@ export default function AdminDashboard({ user, onLogout }) {
 
                             <div className="flex items-center space-x-2 shrink-0">
                               <button
+                                onClick={() => handleOpenEvaluateApp(app)}
+                                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded-lg text-xs font-semibold transition"
+                              >
+                                Evaluate &amp; Onboard
+                              </button>
+                              <button
                                 onClick={() => handleAppStatusChange(app.id, 'Accepted')}
                                 className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold transition"
                               >
@@ -1752,10 +1954,156 @@ export default function AdminDashboard({ user, onLogout }) {
               </div>
             )}
 
+            {/* ================= VIEW: INVESTOR DIRECTORY ================= */}
+            {activeNav === 'investors' && (
+              <InvestorDirectory isAdmin={true} currentUser={user} />
+            )}
+
+            {/* ================= VIEW: MENTOR DIRECTORY ================= */}
+            {activeNav === 'mentors' && (
+              <MentorDirectory isAdmin={true} currentUser={user} />
+            )}
+
+            {/* ================= VIEW: APPROVED VENDORS CATALOG ================= */}
+            {activeNav === 'vendors' && (
+              <VendorDirectory isAdmin={true} currentUser={user} />
+            )}
+
+            {/* ================= VIEW: COMMUNICATION HUB ================= */}
+            {activeNav === 'communication' && (
+              <CommunicationHub isAdmin={true} currentUser={user} />
+            )}
+
+            {/* ================= VIEW: GUIDANCE CENTER ================= */}
+            {activeNav === 'guidance' && (
+              <GuidanceCenter isAdmin={true} currentUser={user} />
+            )}
+
+            {/* ================= VIEW: SUPPORT TICKETS & DESK ================= */}
+            {activeNav === 'support' && (
+              <SupportDesk isAdmin={true} currentUser={user} />
+            )}
+
           </div>
         </main>
 
       </div>
+
+      {/* ================= APPLICATION INTAKE EVALUATION MODAL ================= */}
+      {evalModalApp && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs overflow-y-auto">
+          <div className="relative w-full max-w-2xl bg-white border border-slate-200 rounded-2xl shadow-xl p-6 sm:p-8 my-8 text-slate-900 max-h-[90vh] overflow-y-auto">
+            <button
+              onClick={() => setEvalModalApp(null)}
+              className="absolute top-5 right-5 p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100 transition"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="pb-4 border-b border-slate-100 mb-4">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                Cohort Admissions Screening
+              </span>
+              <h3 className="text-lg font-bold text-slate-900 mt-1">
+                Evaluate: {evalModalApp.startup_name}
+              </h3>
+              <p className="text-xs text-slate-500">
+                Founder: {evalModalApp.founder_name} • Sector: {evalModalApp.sector} • Phone: {evalModalApp.founder_phone}
+              </p>
+            </div>
+
+            <div className="space-y-4 text-xs">
+              <div>
+                <label className="font-bold text-slate-700 uppercase tracking-wider text-[11px] block mb-1">
+                  Executive Pitch Summary
+                </label>
+                <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl leading-relaxed text-slate-700">
+                  {evalModalApp.pitch_summary}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">
+                    Evaluation Committee Score (out of 10)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="1"
+                    max="10"
+                    value={evalScore}
+                    onChange={(e) => setEvalScore(e.target.value)}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">
+                    Assign Incubation Cohort
+                  </label>
+                  <select
+                    value={evalCohort}
+                    onChange={(e) => setEvalCohort(e.target.value)}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold"
+                  >
+                    <option value="Cohort 12 (Spring 2026)">Cohort 12 (Spring 2026)</option>
+                    <option value="Cohort 13 (Autumn 2026)">Cohort 13 (Autumn 2026)</option>
+                    <option value="Pre-Incubation Track">Pre-Incubation Track</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  Evaluation Committee Review Notes
+                </label>
+                <textarea
+                  rows={3}
+                  value={evalNotes}
+                  onChange={(e) => setEvalNotes(e.target.value)}
+                  placeholder="Record panel findings, technical defensibility, market potential, or action items..."
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-xs"
+                />
+              </div>
+
+              <div className="p-3 bg-emerald-50/70 border border-emerald-200 rounded-xl text-emerald-950 text-[11px] leading-relaxed">
+                <strong>Cohort Onboarding Automation:</strong> Clicking "Accept into Cohort" will update admissions status to <span className="font-bold">Accepted</span> and automatically induct the startup into the active portfolio with sanctioned grant framework.
+              </div>
+
+              <div className="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleProcessApplication('Rejected')}
+                  disabled={evalSubmitting}
+                  className="px-3.5 py-2 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold border border-rose-200 text-xs transition disabled:opacity-50"
+                >
+                  Decline Application
+                </button>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleProcessApplication('Interview Scheduled')}
+                    disabled={evalSubmitting}
+                    className="px-3.5 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold border border-slate-200 text-xs transition disabled:opacity-50"
+                  >
+                    Schedule Interview
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleProcessApplication('Accepted')}
+                    disabled={evalSubmitting}
+                    className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs transition disabled:opacity-50"
+                  >
+                    Accept into Cohort &amp; Induct
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ================= POPUP DETAILS MODAL FOR A STARTUP ================= */}
       {selectedStartup && (

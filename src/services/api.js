@@ -132,3 +132,24 @@ export const authApi = {
   }
 };
 
+export const communicationApi = {
+  getStatus: async () => {
+    return await request('/communication/status', { method: 'GET' });
+  },
+
+  sendBroadcast: async (payload) => {
+    return await request('/communication/send', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+  },
+
+  sendTestEmail: async ({ testEmail, subject, htmlBody }) => {
+    return await request('/communication/test', {
+      method: 'POST',
+      body: JSON.stringify({ testEmail, subject, htmlBody })
+    });
+  }
+};
+
+

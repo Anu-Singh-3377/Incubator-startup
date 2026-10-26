@@ -6,6 +6,7 @@ import morgan from 'morgan';
 import dotenv from 'dotenv';
 import fs from 'fs';
 import authRoutes from './routes/auth.routes.js';
+import communicationRoutes from './routes/communication.routes.js';
 import { getUsers } from './db.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -36,6 +37,7 @@ if (fs.existsSync(CLIENT_DIST)) {
 
 // Routes
 app.use('/api/auth', authRoutes);
+app.use('/api/communication', communicationRoutes);
 
 // Health Check
 app.get('/api/health', (req, res) => {
