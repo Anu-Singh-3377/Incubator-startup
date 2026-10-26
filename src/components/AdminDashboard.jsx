@@ -16,33 +16,95 @@ import {
   ChevronRight,
   LogOut,
   Bell,
-  Database,
   Calendar,
   Phone,
   Mail,
   Edit3,
   Trash2,
   X,
-  Upload,
-  ArrowUpDown,
   TrendingUp,
   Award,
   Sparkles,
   LayoutDashboard,
   FolderKanban,
   FileCheck2,
-  Send,
-  Briefcase,
   Check,
-  Layers,
   ChevronDown,
-  Menu
+  Menu,
+  ArrowLeft
 } from 'lucide-react';
-import { supabaseService, isSupabaseConfigured } from '../lib/supabaseClient';
+import { supabaseService } from '../lib/supabaseClient';
+
+// ================= REUSABLE PAGINATION BAR COMPONENT =================
+function PaginationBar({
+  currentPage,
+  totalItems,
+  pageSize,
+  onPageChange,
+  onPageSizeChange,
+  itemName = 'records',
+  pageSizeOptions = [10, 25, 50]
+}) {
+  const totalPages = Math.ceil(totalItems / pageSize) || 1;
+  const startItem = totalItems === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+  const endItem = Math.min(currentPage * pageSize, totalItems);
+
+  return (
+    <div className="p-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500 bg-white">
+      <div className="flex flex-wrap items-center gap-3">
+        <span>
+          Showing <strong className="text-slate-800 font-bold">{startItem}–{endItem}</strong> of{' '}
+          <strong className="text-slate-800 font-bold">{totalItems}</strong> {itemName}
+        </span>
+        {pageSizeOptions && pageSizeOptions.length > 0 && (
+          <div className="flex items-center gap-1.5 ml-1 sm:ml-3">
+            <span className="text-[11px] text-slate-400">Rows per page:</span>
+            <select
+              value={pageSize}
+              onChange={(e) => {
+                onPageSizeChange(Number(e.target.value));
+                onPageChange(1);
+              }}
+              className="px-2 py-1 bg-slate-50 border border-slate-200 rounded text-xs text-slate-700 font-medium focus:outline-none focus:ring-1 focus:ring-emerald-500"
+            >
+              {pageSizeOptions.map((opt) => (
+                <option key={opt} value={opt}>
+                  {opt}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+      </div>
+
+      <div className="flex items-center space-x-1.5">
+        <button
+          type="button"
+          onClick={() => onPageChange(Math.max(currentPage - 1, 1))}
+          disabled={currentPage <= 1}
+          className="px-3 py-1.5 rounded-lg border border-slate-200 text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 font-medium transition"
+        >
+          Previous
+        </button>
+        <span className="px-3 py-1 font-semibold text-slate-800">
+          Page {currentPage} of {totalPages}
+        </span>
+        <button
+          type="button"
+          onClick={() => onPageChange(Math.min(currentPage + 1, totalPages))}
+          disabled={currentPage >= totalPages}
+          className="px-3 py-1.5 rounded-lg border border-slate-200 text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 font-medium transition"
+        >
+          Next
+        </button>
+      </div>
+    </div>
+  );
+}
 
 export default function AdminDashboard({ user, onLogout }) {
-  // Navigation
-  const [activeNav, setActiveNav] = useState('overview'); // 'overview' | 'portfolio' | 'add-startup' | 'documents' | 'applications'
+  // Navigation: 'overview' | 'portfolio' | 'add-startup' | 'documents' | 'applications'
+  const [activeNav, setActiveNav] = useState('overview');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // Data states
@@ -51,19 +113,30 @@ export default function AdminDashboard({ user, onLogout }) {
   const [announcements, setAnnouncements] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Directory Search, Filter, Sort, Pagination
+  // ================= 1. PORTFOLIO DIRECTORY STATE =================
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('All'); // 'All' | 'Active' | 'Alumni'
   const [sectorFilter, setSectorFilter] = useState('All');
-  const [sortBy, setSortBy] = useState('name-asc'); // 'name-asc' | 'name-desc' | 'date-newest' | 'date-oldest'
-  const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 6;
+  const [sortBy, setSortBy] = useState('name-asc');
+  const [portfolioPage, setPortfolioPage] = useState(1);
+  const [portfolioPageSize, setPortfolioPageSize] = useState(10);
+
+  // ================= 2. DOCUMENTS & COMPLIANCE STATE =================
+  const [docSearch, setDocSearch] = useState('');
+  const [docStatusFilter, setDocStatusFilter] = useState('All'); // 'All' | 'Verified' | 'Pending'
+  const [docPage, setDocPage] = useState(1);
+  const [docPageSize, setDocPageSize] = useState(10);
+
+  // ================= 3. COHORT APPLICATIONS STATE =================
+  const [appSearch, setAppSearch] = useState('');
+  const [appStatusFilter, setAppStatusFilter] = useState('All'); // 'All' | 'Under Review' | 'Interview Scheduled' | 'Accepted' | 'Rejected'
+  const [appPage, setAppPage] = useState(1);
+  const [appPageSize, setAppPageSize] = useState(10);
 
   // Selected Startup for Details Modal
   const [selectedStartup, setSelectedStartup] = useState(null);
 
-  // Add / Edit Startup Form Modal
-  const [isFormModalOpen, setIsFormModalOpen] = useState(false);
+  // Add / Edit Startup Form State (Dedicated Page)
   const [editingStartupId, setEditingStartupId] = useState(null);
   const [formData, setFormData] = useState({
     startup_name: '',
@@ -85,12 +158,10 @@ export default function AdminDashboard({ user, onLogout }) {
   const [formSubmitting, setFormSubmitting] = useState(false);
   const [formFeedback, setFormFeedback] = useState(null);
 
-  // Document Upload / Status Modal
-  const [activeDocStartup, setActiveDocStartup] = useState(null);
-  const [selectedDoc, setSelectedDoc] = useState(null);
+  // Document Feedback
   const [docFeedback, setDocFeedback] = useState('');
 
-  // Notifications Popover
+  // Top Popovers
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
 
@@ -165,7 +236,7 @@ export default function AdminDashboard({ user, onLogout }) {
     return Object.keys(errors).length === 0;
   };
 
-  // Open Add Startup
+  // Open Add Startup as Dedicated Page
   const handleOpenAdd = () => {
     setEditingStartupId(null);
     setFormData({
@@ -186,10 +257,10 @@ export default function AdminDashboard({ user, onLogout }) {
     });
     setFormErrors({});
     setFormFeedback(null);
-    setIsFormModalOpen(true);
+    setActiveNav('add-startup');
   };
 
-  // Open Edit Startup
+  // Open Edit Startup as Dedicated Page
   const handleOpenEdit = (startup) => {
     setEditingStartupId(startup.id);
     setFormData({
@@ -210,7 +281,7 @@ export default function AdminDashboard({ user, onLogout }) {
     });
     setFormErrors({});
     setFormFeedback(null);
-    setIsFormModalOpen(true);
+    setActiveNav('add-startup');
   };
 
   // Save Startup (Add or Edit)
@@ -236,14 +307,16 @@ export default function AdminDashboard({ user, onLogout }) {
         setStartups((prev) => [res.startup, ...prev]);
         setFormFeedback({
           type: 'success',
-          message: `Successfully added '${formData.startup_name}' to the incubator portfolio.`
+          message: `Successfully enrolled '${formData.startup_name}' to the incubator portfolio.`
         });
       }
 
+      await loadData();
+
       setTimeout(() => {
-        setIsFormModalOpen(false);
         setFormFeedback(null);
-      }, 1500);
+        setActiveNav('portfolio');
+      }, 1200);
     } catch (err) {
       setFormFeedback({
         type: 'error',
@@ -310,7 +383,7 @@ export default function AdminDashboard({ user, onLogout }) {
     }
   };
 
-  // Filter & Sort Logic
+  // ================= 1. PORTFOLIO FILTER & PAGINATION LOGIC =================
   const filteredStartups = startups
     .filter((s) => {
       const matchSearch =
@@ -326,7 +399,7 @@ export default function AdminDashboard({ user, onLogout }) {
           ? s.status === 'Active' || s.stage !== 'Graduated'
           : s.status === 'Alumni' || s.stage === 'Graduated';
 
-      const matchSector = sectorFilter === 'All' || s.sector.includes(sectorFilter);
+      const matchSector = sectorFilter === 'All' || (s.sector && s.sector.includes(sectorFilter));
 
       return matchSearch && matchStatus && matchSector;
     })
@@ -338,25 +411,181 @@ export default function AdminDashboard({ user, onLogout }) {
       return 0;
     });
 
-  // Pagination calculations
-  const totalPages = Math.ceil(filteredStartups.length / itemsPerPage) || 1;
   const paginatedStartups = filteredStartups.slice(
-    (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
+    (portfolioPage - 1) * portfolioPageSize,
+    portfolioPage * portfolioPageSize
+  );
+
+  // ================= 2. DOCUMENTS FILTER & PAGINATION LOGIC =================
+  const filteredDocStartups = startups.filter((st) => {
+    const matchSearch =
+      st.startup_name.toLowerCase().includes(docSearch.toLowerCase()) ||
+      st.founder_name.toLowerCase().includes(docSearch.toLowerCase()) ||
+      (st.mca_number && st.mca_number.toLowerCase().includes(docSearch.toLowerCase()));
+
+    if (!matchSearch) return false;
+
+    if (docStatusFilter === 'All') return true;
+
+    const allVerified = (st.documents || []).length > 0 &&
+      st.documents.every((d) => d.status === 'Verified');
+
+    if (docStatusFilter === 'Verified') return allVerified;
+    if (docStatusFilter === 'Pending') return !allVerified;
+
+    return true;
+  });
+
+  const paginatedDocStartups = filteredDocStartups.slice(
+    (docPage - 1) * docPageSize,
+    docPage * docPageSize
+  );
+
+  // ================= 3. APPLICATIONS FILTER & PAGINATION LOGIC =================
+  const filteredApplications = applications.filter((app) => {
+    const matchSearch =
+      app.startup_name.toLowerCase().includes(appSearch.toLowerCase()) ||
+      app.founder_name.toLowerCase().includes(appSearch.toLowerCase()) ||
+      (app.sector && app.sector.toLowerCase().includes(appSearch.toLowerCase()));
+
+    const matchStatus = appStatusFilter === 'All' || app.status === appStatusFilter;
+
+    return matchSearch && matchStatus;
+  });
+
+  const paginatedApplications = filteredApplications.slice(
+    (appPage - 1) * appPageSize,
+    appPage * appPageSize
   );
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] text-slate-900 flex flex-col font-sans selection:bg-emerald-600 selection:text-white">
+    <div className="h-screen w-screen overflow-hidden bg-[#F8FAFC] text-slate-900 flex flex-col font-sans selection:bg-emerald-600 selection:text-white">
       {/* Top Subtle Tri-color Growth Ribbon */}
-      <div className="w-full h-[3px] bg-gradient-to-r from-orange-500 via-amber-400 to-emerald-600" />
+      <div className="w-full h-[3px] bg-gradient-to-r from-orange-500 via-amber-400 to-emerald-600 shrink-0 z-30" />
 
-      {/* Main Authenticated Layout with Sidebar */}
-      <div className="flex flex-1 overflow-hidden">
+      {/* ================= FIXED TOP NAVBAR ================= */}
+      <header className="h-16 w-full bg-white/95 border-b border-slate-200/90 backdrop-blur-md px-4 sm:px-6 lg:px-8 flex items-center justify-between shrink-0 z-20">
+        <div className="flex items-center space-x-3">
+          {/* Mobile Menu Trigger */}
+          <button
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            aria-label={mobileMenuOpen ? 'Close navigation menu' : 'Open navigation menu'}
+            aria-expanded={mobileMenuOpen}
+            className="lg:hidden p-2 rounded-lg text-slate-600 hover:bg-slate-100 border border-slate-200"
+          >
+            {mobileMenuOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
+          </button>
+
+          <div>
+            <h1 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight flex items-center gap-2">
+              <span>Incubator Dashboard</span>
+              <span className="hidden sm:inline-flex px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                Portfolio Management
+              </span>
+            </h1>
+            <p className="text-xs text-slate-500 hidden sm:block">
+              Nurture innovation. Track progress. Build what's next.
+            </p>
+          </div>
+        </div>
+
+        {/* Right Top Actions (Add Startup duplicate removed) */}
+        <div className="flex items-center space-x-3">
+          {/* Live Formatted Date */}
+          <div className="hidden md:flex items-center space-x-1.5 text-xs text-slate-600 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200">
+            <Calendar className="w-3.5 h-3.5 text-emerald-600" />
+            <span>{currentDateFormatted}</span>
+          </div>
+
+          {/* Notifications Popover */}
+          <div className="relative">
+            <button
+              onClick={() => setNotificationsOpen(!notificationsOpen)}
+              className="p-2 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 border border-slate-200 relative transition"
+              title="Notifications"
+            >
+              <Bell className="w-4 h-4" />
+              {pendingAppsCount > 0 && (
+                <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-amber-500" />
+              )}
+            </button>
+
+            {notificationsOpen && (
+              <div className="absolute right-0 mt-2 w-80 bg-white border border-slate-200 rounded-xl shadow-lg p-4 z-40 text-xs">
+                <div className="flex items-center justify-between pb-2 border-b border-slate-100 mb-2">
+                  <span className="font-bold text-slate-900">Notifications</span>
+                  <span className="text-[10px] text-slate-500 font-semibold">{pendingAppsCount} pending</span>
+                </div>
+                <div className="space-y-2 max-h-60 overflow-y-auto">
+                  {pendingAppsCount > 0 ? (
+                    <div className="p-2.5 bg-amber-50/70 border border-amber-200 rounded-lg text-amber-900">
+                      <p className="font-semibold text-xs">{pendingAppsCount} applications pending screening</p>
+                      <p className="text-[11px] text-amber-700 mt-0.5">Cohort admissions evaluation in progress.</p>
+                    </div>
+                  ) : (
+                    <p className="text-slate-500 py-2 text-center">No unread notifications.</p>
+                  )}
+                  {announcements.slice(0, 2).map((a) => (
+                    <div key={a.id} className="p-2 bg-slate-50 rounded-lg border border-slate-100">
+                      <p className="font-bold text-slate-800 text-[11px]">{a.title}</p>
+                      <p className="text-[10px] text-slate-500 mt-0.5 truncate">{a.content}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Profile Menu */}
+          <div className="relative">
+            <button
+              onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
+              className="flex items-center space-x-2 pl-2 border-l border-slate-200 text-left hover:opacity-90 transition"
+            >
+              <div className="w-8 h-8 rounded-full bg-emerald-100 border border-emerald-300 text-emerald-800 font-bold flex items-center justify-center text-xs">
+                {user?.full_name ? user.full_name[0] : 'V'}
+              </div>
+              <div className="hidden xl:block">
+                <p className="text-xs font-bold text-slate-900 leading-tight">
+                  {user?.full_name || 'Incubation Director'}
+                </p>
+                <p className="text-[10px] text-slate-500 capitalize">
+                  {user?.role || 'Admin'}
+                </p>
+              </div>
+              <ChevronDown className="w-3.5 h-3.5 text-slate-500 hidden xl:block" />
+            </button>
+
+            {profileDropdownOpen && (
+              <div className="absolute right-0 mt-2 w-56 bg-white border border-slate-200 rounded-xl shadow-lg p-2 z-40 text-xs">
+                <div className="px-3 py-2 border-b border-slate-100 mb-1">
+                  <p className="font-bold text-slate-900">{user?.full_name || 'Incubation Director'}</p>
+                  <p className="text-[11px] text-slate-500 font-mono truncate">{user?.email}</p>
+                  <span className="inline-block mt-1 px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    Incubator Directorate
+                  </span>
+                </div>
+
+                <button
+                  onClick={onLogout}
+                  className="w-full flex items-center space-x-2 px-3 py-2 text-rose-600 hover:bg-rose-50 rounded-lg transition font-medium text-left"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  <span>Sign Out</span>
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </header>
+
+      {/* ================= BODY WRAPPER: FIXED SIDEBAR + SCROLLABLE MAIN ================= */}
+      <div className="flex flex-1 min-h-0 w-full overflow-hidden relative">
         
-        {/* ================= SIDEBAR NAVIGATION ================= */}
-        <aside className="hidden lg:flex lg:flex-col w-64 h-screen sticky top-0 bg-white border-r border-slate-200/90 shadow-sm shrink-0">
+        {/* ================= FIXED SIDEBAR NAVIGATION ================= */}
+        <aside className="hidden lg:flex lg:flex-col w-64 h-full bg-white border-r border-slate-200/90 shadow-xs shrink-0 z-10 overflow-y-auto">
           {/* Logo & Incubator Identity */}
-          <div className="p-5 border-b border-slate-100 flex items-center space-x-3">
+          <div className="p-5 border-b border-slate-100 flex items-center space-x-3 shrink-0">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-600 to-teal-700 flex items-center justify-center font-black text-white shadow-sm">
               VB
             </div>
@@ -365,14 +594,14 @@ export default function AdminDashboard({ user, onLogout }) {
                 VentureBharat
               </h2>
               <p className="text-[11px] font-semibold text-emerald-700">
-                Incubator & Portfolio Hub
+                Incubator &amp; Portfolio Hub
               </p>
             </div>
           </div>
 
           {/* Navigation Links */}
           <nav className="flex-1 p-3.5 space-y-1 overflow-y-auto">
-            <div className="px-3 pt-2 pb-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+            <div className="px-3 pt-2 pb-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">
               Portfolio Management
             </div>
 
@@ -405,11 +634,16 @@ export default function AdminDashboard({ user, onLogout }) {
               </span>
             </button>
 
+            {/* Dedicated Add Startup Page link in Sidebar */}
             <button
               onClick={handleOpenAdd}
-              className="w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-lg text-xs font-medium text-emerald-700 hover:bg-emerald-50/70 transition"
+              className={`w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-lg text-xs font-medium transition ${
+                activeNav === 'add-startup'
+                  ? 'bg-emerald-50 text-emerald-800 font-bold border-l-4 border-emerald-600 shadow-xs'
+                  : 'text-emerald-700 hover:text-emerald-900 hover:bg-emerald-50/60'
+              }`}
             >
-              <PlusCircle className="w-4 h-4 text-emerald-600" />
+              <PlusCircle className={`w-4 h-4 ${activeNav === 'add-startup' ? 'text-emerald-700' : 'text-emerald-600'}`} />
               <span>Add New Startup</span>
             </button>
 
@@ -422,11 +656,11 @@ export default function AdminDashboard({ user, onLogout }) {
               }`}
             >
               <FileCheck2 className={`w-4 h-4 ${activeNav === 'documents' ? 'text-emerald-700' : 'text-slate-500'}`} />
-              <span>Documents & Compliance</span>
+              <span>Documents &amp; Compliance</span>
             </button>
 
-            <div className="pt-4 px-3 pb-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-500">
-              Admissions & System
+            <div className="pt-4 px-3 pb-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+              Admissions &amp; System
             </div>
 
             <button
@@ -447,277 +681,134 @@ export default function AdminDashboard({ user, onLogout }) {
                 </span>
               )}
             </button>
-
           </nav>
-
-          {/* Database & Sync Status Footer Card */}
-          <div className="p-4 m-3 bg-slate-50 rounded-xl border border-slate-200/80 text-xs space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="font-semibold text-slate-700 flex items-center gap-1.5">
-                <Database className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Supabase Sync</span>
-              </span>
-              <span className={`w-2 h-2 rounded-full ${isSupabaseConfigured ? 'bg-emerald-500' : 'bg-amber-400'}`} />
-            </div>
-            <p className="text-[11px] text-slate-600 leading-tight">
-              {isSupabaseConfigured
-                ? 'Connected to live PostgreSQL database with Row Level Security.'
-                : 'Demo Mode active. Ready to connect live Supabase keys.'}
-            </p>
-          </div>
         </aside>
 
-        {/* ================= MAIN CONTENT AREA ================= */}
-        <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
+        {/* Mobile Navigation Drawer */}
+        {mobileMenuOpen && (
+          <div className="lg:hidden absolute top-0 left-0 right-0 z-30 bg-white border-b border-slate-200 p-4 space-y-2 text-xs shadow-lg">
+            <button
+              onClick={() => { setActiveNav('overview'); setMobileMenuOpen(false); }}
+              className={`w-full flex items-center space-x-2 p-2.5 rounded-lg ${activeNav === 'overview' ? 'bg-emerald-50 text-emerald-800 font-bold' : 'text-slate-600'}`}
+            >
+              <LayoutDashboard className="w-4 h-4 text-emerald-600" />
+              <span>Overview</span>
+            </button>
+            <button
+              onClick={() => { setActiveNav('portfolio'); setMobileMenuOpen(false); }}
+              className={`w-full flex items-center space-x-2 p-2.5 rounded-lg ${activeNav === 'portfolio' ? 'bg-emerald-50 text-emerald-800 font-bold' : 'text-slate-600'}`}
+            >
+              <FolderKanban className="w-4 h-4 text-emerald-600" />
+              <span>Startup Portfolio</span>
+            </button>
+            <button
+              onClick={() => { handleOpenAdd(); setMobileMenuOpen(false); }}
+              className={`w-full flex items-center space-x-2 p-2.5 rounded-lg ${activeNav === 'add-startup' ? 'bg-emerald-50 text-emerald-800 font-bold' : 'text-emerald-700'}`}
+            >
+              <PlusCircle className="w-4 h-4 text-emerald-600" />
+              <span>Add New Startup</span>
+            </button>
+            <button
+              onClick={() => { setActiveNav('documents'); setMobileMenuOpen(false); }}
+              className={`w-full flex items-center space-x-2 p-2.5 rounded-lg ${activeNav === 'documents' ? 'bg-emerald-50 text-emerald-800 font-bold' : 'text-slate-600'}`}
+            >
+              <FileCheck2 className="w-4 h-4 text-emerald-600" />
+              <span>Documents &amp; Compliance</span>
+            </button>
+            <button
+              onClick={() => { setActiveNav('applications'); setMobileMenuOpen(false); }}
+              className={`w-full flex items-center space-x-2 p-2.5 rounded-lg ${activeNav === 'applications' ? 'bg-emerald-50 text-emerald-800 font-bold' : 'text-slate-600'}`}
+            >
+              <FileText className="w-4 h-4 text-emerald-600" />
+              <span>Cohort Applications</span>
+            </button>
+          </div>
+        )}
 
-          {/* Top Sticky Header */}
-          <header className="sticky top-0 z-20 bg-white/95 border-b border-slate-200/90 backdrop-blur-md px-4 sm:px-8 py-3.5 flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              {/* Mobile Menu Trigger */}
-              <button
-                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                aria-label={mobileMenuOpen ? 'Close navigation menu' : 'Open navigation menu'}
-                aria-expanded={mobileMenuOpen}
-                className="lg:hidden p-2 rounded-lg text-slate-600 hover:bg-slate-100 border border-slate-200"
-              >
-                {mobileMenuOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
-              </button>
+        {/* ================= MAIN SCROLLABLE CONTENT AREA ================= */}
+        <main className="flex-1 min-w-0 h-full overflow-y-auto bg-[#F8FAFC]">
+          <div className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl w-full mx-auto">
 
-              <div>
-                <h1 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight flex items-center gap-2">
-                  <span>Incubator Dashboard</span>
-                  <span className="hidden sm:inline-flex px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                    Portfolio Management
-                  </span>
-                </h1>
-                <p className="text-xs text-slate-600 hidden sm:block">
-                  Nurture innovation. Track progress. Build what's next.
-                </p>
-              </div>
-            </div>
-
-            {/* Right Top Actions */}
-            <div className="flex items-center space-x-3">
-              {/* Live Formatted Date */}
-              <div className="hidden md:flex items-center space-x-1.5 text-xs text-slate-600 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200">
-                <Calendar className="w-3.5 h-3.5 text-emerald-600" />
-                <span>{currentDateFormatted}</span>
-              </div>
-
-              {/* Prominent Add Startup Button */}
-              <button
-                onClick={handleOpenAdd}
-                className="flex items-center space-x-1.5 px-3.5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-xs transition transform hover:-translate-y-0.5 active:translate-y-0"
-              >
-                <PlusCircle className="w-4 h-4" />
-                <span className="hidden sm:inline">Add Startup</span>
-                <span className="sm:hidden">Add</span>
-              </button>
-
-              {/* Notifications Popover */}
-              <div className="relative">
-                <button
-                  onClick={() => setNotificationsOpen(!notificationsOpen)}
-                  className="p-2 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 border border-slate-200 relative transition"
-                  title="Notifications"
-                >
-                  <Bell className="w-4 h-4" />
-                  {pendingAppsCount > 0 && (
-                    <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-amber-500" />
-                  )}
-                </button>
-
-                {notificationsOpen && (
-                  <div className="absolute right-0 mt-2 w-80 bg-white border border-slate-200 rounded-xl shadow-lg p-4 z-40 text-xs">
-                    <div className="flex items-center justify-between pb-2 border-b border-slate-100 mb-2">
-                      <span className="font-bold text-slate-900">Notifications</span>
-                      <span className="text-[10px] text-slate-500 font-semibold">{pendingAppsCount} pending</span>
-                    </div>
-                    <div className="space-y-2 max-h-60 overflow-y-auto">
-                      {pendingAppsCount > 0 ? (
-                        <div className="p-2.5 bg-amber-50/70 border border-amber-200 rounded-lg text-amber-900">
-                          <p className="font-semibold text-xs">{pendingAppsCount} applications pending screening</p>
-                          <p className="text-[11px] text-amber-700 mt-0.5">Cohort 13 admission evaluation in progress.</p>
-                        </div>
-                      ) : (
-                        <p className="text-slate-500 py-2 text-center">No unread notifications.</p>
-                      )}
-                      {announcements.slice(0, 2).map((a) => (
-                        <div key={a.id} className="p-2 bg-slate-50 rounded-lg border border-slate-100">
-                          <p className="font-bold text-slate-800 text-[11px]">{a.title}</p>
-                          <p className="text-[10px] text-slate-500 mt-0.5 truncate">{a.content}</p>
-                        </div>
-                      ))}
+            {/* ================= OVERVIEW CARDS (Visible on Overview & Portfolio) ================= */}
+            {activeNav !== 'add-startup' && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                
+                {/* 1. Total Startups Card */}
+                <div className="p-5 rounded-xl bg-white border border-slate-200/90 shadow-xs hover:shadow-sm transition">
+                  <div className="flex items-center justify-between text-slate-500 mb-2">
+                    <span className="text-xs font-semibold text-slate-600 uppercase tracking-wider">
+                      Total Startups
+                    </span>
+                    <div className="p-2 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-100">
+                      <Building2 className="w-4 h-4" />
                     </div>
                   </div>
-                )}
-              </div>
-
-              {/* Profile Menu */}
-              <div className="relative">
-                <button
-                  onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
-                  className="flex items-center space-x-2 pl-2 border-l border-slate-200 text-left hover:opacity-90 transition"
-                >
-                  <div className="w-8 h-8 rounded-full bg-emerald-100 border border-emerald-300 text-emerald-800 font-bold flex items-center justify-center text-xs">
-                    {user?.full_name ? user.full_name[0] : 'V'}
+                  <div className="text-3xl font-black text-slate-900 tracking-tight">
+                    {totalCount}
                   </div>
-                  <div className="hidden xl:block">
-                    <p className="text-xs font-bold text-slate-900 leading-tight">
-                      {user?.full_name || 'Incubation Director'}
-                    </p>
-                    <p className="text-[10px] text-slate-500 capitalize">
-                      {user?.role || 'Admin'}
-                    </p>
-                  </div>
-                  <ChevronDown className="w-3.5 h-3.5 text-slate-500 hidden xl:block" />
-                </button>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Nurtured across all active &amp; graduated cohorts
+                  </p>
+                </div>
 
-                {profileDropdownOpen && (
-                  <div className="absolute right-0 mt-2 w-56 bg-white border border-slate-200 rounded-xl shadow-lg p-2 z-40 text-xs">
-                    <div className="px-3 py-2 border-b border-slate-100 mb-1">
-                      <p className="font-bold text-slate-900">{user?.full_name || 'Col. Vikramaditya Rathore'}</p>
-                      <p className="text-[11px] text-slate-500 font-mono truncate">{user?.email}</p>
-                      <span className="inline-block mt-1 px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                        Incubator Directorate
-                      </span>
+                {/* 2. Active Startups Card */}
+                <div className="p-5 rounded-xl bg-white border border-slate-200/90 shadow-xs hover:shadow-sm transition">
+                  <div className="flex items-center justify-between text-slate-500 mb-2">
+                    <span className="text-xs font-semibold text-slate-600 uppercase tracking-wider">
+                      Active Incubatees
+                    </span>
+                    <div className="p-2 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-100">
+                      <TrendingUp className="w-4 h-4" />
                     </div>
-
-                    <button
-                      onClick={onLogout}
-                      className="w-full flex items-center space-x-2 px-3 py-2 text-rose-600 hover:bg-rose-50 rounded-lg transition font-medium text-left"
-                    >
-                      <LogOut className="w-3.5 h-3.5" />
-                      <span>Sign Out</span>
-                    </button>
                   </div>
-                )}
-              </div>
-            </div>
-          </header>
-
-          {/* Mobile Navigation Drawer */}
-          {mobileMenuOpen && (
-            <div className="lg:hidden bg-white border-b border-slate-200 p-4 space-y-2 text-xs">
-              <button
-                onClick={() => { setActiveNav('overview'); setMobileMenuOpen(false); }}
-                className={`w-full flex items-center space-x-2 p-2.5 rounded-lg ${activeNav === 'overview' ? 'bg-emerald-50 text-emerald-800 font-bold' : 'text-slate-600'}`}
-              >
-                <LayoutDashboard className="w-4 h-4 text-emerald-600" />
-                <span>Overview</span>
-              </button>
-              <button
-                onClick={() => { setActiveNav('portfolio'); setMobileMenuOpen(false); }}
-                className={`w-full flex items-center space-x-2 p-2.5 rounded-lg ${activeNav === 'portfolio' ? 'bg-emerald-50 text-emerald-800 font-bold' : 'text-slate-600'}`}
-              >
-                <FolderKanban className="w-4 h-4 text-emerald-600" />
-                <span>Startup Portfolio</span>
-              </button>
-              <button
-                onClick={() => { handleOpenAdd(); setMobileMenuOpen(false); }}
-                className="w-full flex items-center space-x-2 p-2.5 rounded-lg text-emerald-700 hover:bg-emerald-50/70"
-              >
-                <PlusCircle className="w-4 h-4 text-emerald-600" />
-                <span>Add New Startup</span>
-              </button>
-              <button
-                onClick={() => { setActiveNav('documents'); setMobileMenuOpen(false); }}
-                className={`w-full flex items-center space-x-2 p-2.5 rounded-lg ${activeNav === 'documents' ? 'bg-emerald-50 text-emerald-800 font-bold' : 'text-slate-600'}`}
-              >
-                <FileCheck2 className="w-4 h-4 text-emerald-600" />
-                <span>Documents & Compliance</span>
-              </button>
-              <button
-                onClick={() => { setActiveNav('applications'); setMobileMenuOpen(false); }}
-                className={`w-full flex items-center space-x-2 p-2.5 rounded-lg ${activeNav === 'applications' ? 'bg-emerald-50 text-emerald-800 font-bold' : 'text-slate-600'}`}
-              >
-                <FileText className="w-4 h-4 text-emerald-600" />
-                <span>Cohort Applications</span>
-              </button>
-            </div>
-          )}
-
-          {/* Dashboard Body */}
-          <main className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl w-full mx-auto">
-
-            {/* ================= SECTION B: PORTFOLIO OVERVIEW CARDS ================= */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              
-              {/* 1. Total Startups Card */}
-              <div className="p-5 rounded-xl bg-white border border-slate-200/90 shadow-xs hover:shadow-sm transition">
-                <div className="flex items-center justify-between text-slate-500 mb-2">
-                  <span className="text-xs font-semibold text-slate-600 uppercase tracking-wider">
-                    Total Startups
-                  </span>
-                  <div className="p-2 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-100">
-                    <Building2 className="w-4 h-4" />
+                  <div className="text-3xl font-black text-emerald-700 tracking-tight">
+                    {activeCount}
                   </div>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Currently in prototype fabrication &amp; pilot stages
+                  </p>
                 </div>
-                <div className="text-3xl font-black text-slate-900 tracking-tight">
-                  {totalCount}
-                </div>
-                <p className="text-xs text-slate-500 mt-1">
-                  Nurtured across all active & graduated cohorts
-                </p>
-              </div>
 
-              {/* 2. Active Startups Card */}
-              <div className="p-5 rounded-xl bg-white border border-slate-200/90 shadow-xs hover:shadow-sm transition">
-                <div className="flex items-center justify-between text-slate-500 mb-2">
-                  <span className="text-xs font-semibold text-slate-600 uppercase tracking-wider">
-                    Active Incubatees
-                  </span>
-                  <div className="p-2 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-100">
-                    <TrendingUp className="w-4 h-4" />
+                {/* 3. Alumni Startups Card */}
+                <div className="p-5 rounded-xl bg-white border border-slate-200/90 shadow-xs hover:shadow-sm transition">
+                  <div className="flex items-center justify-between text-slate-500 mb-2">
+                    <span className="text-xs font-semibold text-slate-600 uppercase tracking-wider">
+                      Alumni Startups
+                    </span>
+                    <div className="p-2 rounded-lg bg-blue-50 text-blue-700 border border-blue-100">
+                      <Award className="w-4 h-4" />
+                    </div>
                   </div>
-                </div>
-                <div className="text-3xl font-black text-emerald-700 tracking-tight">
-                  {activeCount}
-                </div>
-                <p className="text-xs text-slate-500 mt-1">
-                  Currently in prototype fabrication & pilot stages
-                </p>
-              </div>
-
-              {/* 3. Alumni Startups Card */}
-              <div className="p-5 rounded-xl bg-white border border-slate-200/90 shadow-xs hover:shadow-sm transition">
-                <div className="flex items-center justify-between text-slate-500 mb-2">
-                  <span className="text-xs font-semibold text-slate-600 uppercase tracking-wider">
-                    Alumni Startups
-                  </span>
-                  <div className="p-2 rounded-lg bg-blue-50 text-blue-700 border border-blue-100">
-                    <Award className="w-4 h-4" />
+                  <div className="text-3xl font-black text-blue-800 tracking-tight">
+                    {alumniCount}
                   </div>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Successfully graduated with market traction &amp; funding
+                  </p>
                 </div>
-                <div className="text-3xl font-black text-blue-800 tracking-tight">
-                  {alumniCount}
-                </div>
-                <p className="text-xs text-slate-500 mt-1">
-                  Successfully graduated with market traction & funding
-                </p>
-              </div>
 
-              {/* 4. Pending Applications / Documents */}
-              <div className="p-5 rounded-xl bg-white border border-slate-200/90 shadow-xs hover:shadow-sm transition">
-                <div className="flex items-center justify-between text-slate-500 mb-2">
-                  <span className="text-xs font-semibold text-slate-600 uppercase tracking-wider">
-                    Pending Clearance
-                  </span>
-                  <div className="p-2 rounded-lg bg-amber-50 text-amber-700 border border-amber-100">
-                    <Clock className="w-4 h-4" />
+                {/* 4. Pending Applications / Documents */}
+                <div className="p-5 rounded-xl bg-white border border-slate-200/90 shadow-xs hover:shadow-sm transition">
+                  <div className="flex items-center justify-between text-slate-500 mb-2">
+                    <span className="text-xs font-semibold text-slate-600 uppercase tracking-wider">
+                      Pending Clearance
+                    </span>
+                    <div className="p-2 rounded-lg bg-amber-50 text-amber-700 border border-amber-100">
+                      <Clock className="w-4 h-4" />
+                    </div>
                   </div>
+                  <div className="text-3xl font-black text-amber-700 tracking-tight">
+                    {pendingAppsCount}
+                  </div>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Cohort applications awaiting panel review
+                  </p>
                 </div>
-                <div className="text-3xl font-black text-amber-700 tracking-tight">
-                  {pendingAppsCount}
-                </div>
-                <p className="text-xs text-slate-500 mt-1">
-                  Cohort 13 applications awaiting panel review
-                </p>
+
               </div>
+            )}
 
-            </div>
-
-            {/* ================= VIEW 1: OVERVIEW & RECENT PORTFOLIO ================= */}
+            {/* ================= VIEW 1: OVERVIEW ================= */}
             {activeNav === 'overview' && (
               <div className="space-y-6">
                 
@@ -737,9 +828,10 @@ export default function AdminDashboard({ user, onLogout }) {
                     <div className="mt-4 flex flex-wrap items-center gap-3">
                       <button
                         onClick={handleOpenAdd}
-                        className="px-4 py-2 bg-white text-emerald-800 hover:bg-emerald-50 rounded-lg text-xs font-bold transition shadow-xs"
+                        className="px-4 py-2 bg-white text-emerald-800 hover:bg-emerald-50 rounded-lg text-xs font-bold transition shadow-xs flex items-center gap-1.5"
                       >
-                        + Add Startup to Portfolio
+                        <PlusCircle className="w-4 h-4 text-emerald-700" />
+                        <span>Add Startup to Portfolio</span>
                       </button>
                       <button
                         onClick={() => setActiveNav('portfolio')}
@@ -859,7 +951,7 @@ export default function AdminDashboard({ user, onLogout }) {
             )}
 
             {/* ================= VIEW 2: PORTFOLIO DIRECTORY ================= */}
-            {(activeNav === 'portfolio' || activeNav === 'overview') && activeNav !== 'overview' && (
+            {activeNav === 'portfolio' && (
               <div className="space-y-4">
                 
                 {/* Search, Filter & Actions Toolbar */}
@@ -874,7 +966,7 @@ export default function AdminDashboard({ user, onLogout }) {
                         value={searchTerm}
                         onChange={(e) => {
                           setSearchTerm(e.target.value);
-                          setCurrentPage(1);
+                          setPortfolioPage(1);
                         }}
                         placeholder="Search by company name, founder, MCA/CIN, or DPIIT..."
                         className="w-full pl-9 pr-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-600 transition"
@@ -889,10 +981,10 @@ export default function AdminDashboard({ user, onLogout }) {
                         {['All', 'Active', 'Alumni'].map((st) => (
                           <button
                             key={st}
-                            onClick={() => { setStatusFilter(st); setCurrentPage(1); }}
+                            onClick={() => { setStatusFilter(st); setPortfolioPage(1); }}
                             className={`px-3 py-1.5 rounded-md transition ${
                               statusFilter === st
-                                ? 'bg-white text-emerald-800 shadow-xs'
+                                ? 'bg-white text-emerald-800 shadow-xs font-bold'
                                 : 'text-slate-500 hover:text-slate-900'
                             }`}
                           >
@@ -904,14 +996,14 @@ export default function AdminDashboard({ user, onLogout }) {
                       {/* Sector Filter */}
                       <select
                         value={sectorFilter}
-                        onChange={(e) => { setSectorFilter(e.target.value); setCurrentPage(1); }}
+                        onChange={(e) => { setSectorFilter(e.target.value); setPortfolioPage(1); }}
                         className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-700 font-medium focus:outline-none"
                       >
                         <option value="All">All Innovation Sectors</option>
-                        <option value="AgriTech">AgriTech & AI</option>
-                        <option value="HealthTech">HealthTech & BioSensors</option>
-                        <option value="CleanTech">CleanTech & Energy</option>
-                        <option value="DeepTech">DeepTech & Aerospace</option>
+                        <option value="AgriTech">AgriTech &amp; AI</option>
+                        <option value="HealthTech">HealthTech &amp; BioSensors</option>
+                        <option value="CleanTech">CleanTech &amp; Energy</option>
+                        <option value="DeepTech">DeepTech &amp; Aerospace</option>
                         <option value="FinTech">FinTech</option>
                       </select>
 
@@ -926,6 +1018,15 @@ export default function AdminDashboard({ user, onLogout }) {
                         <option value="date-newest">Sort: Date Added (Newest)</option>
                         <option value="date-oldest">Sort: Date Added (Oldest)</option>
                       </select>
+
+                      {/* Add Startup Button in Toolbar */}
+                      <button
+                        onClick={handleOpenAdd}
+                        className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-xs flex items-center gap-1.5 transition ml-auto md:ml-0"
+                      >
+                        <PlusCircle className="w-3.5 h-3.5" />
+                        <span>Add Startup</span>
+                      </button>
                     </div>
 
                   </div>
@@ -1020,7 +1121,7 @@ export default function AdminDashboard({ user, onLogout }) {
                                   <button
                                     onClick={() => setSelectedStartup(st)}
                                     className="p-1.5 text-slate-500 hover:text-emerald-700 hover:bg-emerald-50 rounded-md transition"
-                                    title="View Details & Documents"
+                                    title="View Details &amp; Documents"
                                   >
                                     <ExternalLink className="w-3.5 h-3.5" />
                                   </button>
@@ -1046,35 +1147,16 @@ export default function AdminDashboard({ user, onLogout }) {
                       </table>
                     </div>
 
-                    {/* Pagination Bar */}
-                    {totalPages > 1 && (
-                      <div className="p-4 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
-                        <span>
-                          Showing {(currentPage - 1) * itemsPerPage + 1} to{' '}
-                          {Math.min(currentPage * itemsPerPage, filteredStartups.length)} of{' '}
-                          {filteredStartups.length} startups
-                        </span>
-                        <div className="flex items-center space-x-1.5">
-                          <button
-                            onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
-                            disabled={currentPage === 1}
-                            className="px-2.5 py-1 rounded border border-slate-200 text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50"
-                          >
-                            Previous
-                          </button>
-                          <span className="px-2 font-bold text-slate-900">
-                            {currentPage} / {totalPages}
-                          </span>
-                          <button
-                            onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
-                            disabled={currentPage === totalPages}
-                            className="px-2.5 py-1 rounded border border-slate-200 text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50"
-                          >
-                            Next
-                          </button>
-                        </div>
-                      </div>
-                    )}
+                    {/* Consistent Pagination Bar */}
+                    <PaginationBar
+                      currentPage={portfolioPage}
+                      totalItems={filteredStartups.length}
+                      pageSize={portfolioPageSize}
+                      onPageChange={setPortfolioPage}
+                      onPageSizeChange={setPortfolioPageSize}
+                      itemName="startups"
+                      pageSizeOptions={[10, 25, 50]}
+                    />
 
                   </div>
                 )}
@@ -1082,214 +1164,600 @@ export default function AdminDashboard({ user, onLogout }) {
               </div>
             )}
 
-            {/* ================= VIEW 3: DOCUMENTS & COMPLIANCE REPOSITORY ================= */}
-            {activeNav === 'documents' && (
+            {/* ================= VIEW 3: DEDICATED FULL-PAGE ADD / EDIT STARTUP ================= */}
+            {activeNav === 'add-startup' && (
               <div className="space-y-6">
                 
-                {/* Header card */}
-                <div className="p-6 rounded-xl bg-white border border-slate-200/90 shadow-xs">
+                {/* Page Header */}
+                <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+                  <div className="flex items-center space-x-3">
+                    <button
+                      type="button"
+                      onClick={() => setActiveNav('portfolio')}
+                      className="p-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-white hover:text-slate-900 transition"
+                      title="Back to Startup Portfolio"
+                    >
+                      <ArrowLeft className="w-4 h-4" />
+                    </button>
+                    <div>
+                      <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                        <Building2 className="w-5 h-5 text-emerald-600" />
+                        <span>{editingStartupId ? 'Edit Startup Record' : 'Add New Startup to Portfolio'}</span>
+                      </h2>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        {editingStartupId
+                          ? `Modify company incorporation, founder contacts, and grant details for ${formData.startup_name || 'startup'}.`
+                          : 'Enroll a new venture into the incubator portfolio with MCA, founder, and compliance records.'}
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setActiveNav('portfolio')}
+                    className="px-3 py-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900 border border-slate-200 rounded-lg bg-white hover:bg-slate-50 transition"
+                  >
+                    Back to Portfolio
+                  </button>
+                </div>
+
+                {/* Form Feedback Alert */}
+                {formFeedback && (
+                  <div
+                    className={`p-3.5 rounded-xl text-xs border flex items-center gap-2.5 ${
+                      formFeedback.type === 'success'
+                        ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                        : 'bg-rose-50 border-rose-200 text-rose-800'
+                    }`}
+                  >
+                    {formFeedback.type === 'success' ? (
+                      <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+                    ) : (
+                      <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                    )}
+                    <span className="font-medium">{formFeedback.message}</span>
+                  </div>
+                )}
+
+                {/* Main Form Container */}
+                <div className="bg-white border border-slate-200/90 rounded-2xl shadow-xs p-6 sm:p-8">
+                  <form onSubmit={handleSaveStartup} className="space-y-5 text-xs">
+                    
+                    {/* Row 1: Company Name & Founder Name */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-slate-700 font-semibold mb-1.5">
+                          Company / Startup Name <span className="text-rose-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={formData.startup_name}
+                          onChange={(e) => setFormData({ ...formData, startup_name: e.target.value })}
+                          placeholder="e.g. KisanSetu DeepTech Labs"
+                          className={`w-full px-3.5 py-2.5 bg-slate-50 border rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:bg-white transition ${
+                            formErrors.startup_name ? 'border-rose-400 bg-rose-50/30' : 'border-slate-200'
+                          }`}
+                        />
+                        {formErrors.startup_name && (
+                          <p className="text-rose-600 text-[11px] mt-1 font-medium">{formErrors.startup_name}</p>
+                        )}
+                      </div>
+
+                      <div>
+                        <label className="block text-slate-700 font-semibold mb-1.5">
+                          Founder Name <span className="text-rose-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={formData.founder_name}
+                          onChange={(e) => setFormData({ ...formData, founder_name: e.target.value })}
+                          placeholder="e.g. Aarav Sharma"
+                          className={`w-full px-3.5 py-2.5 bg-slate-50 border rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:bg-white transition ${
+                            formErrors.founder_name ? 'border-rose-400 bg-rose-50/30' : 'border-slate-200'
+                          }`}
+                        />
+                        {formErrors.founder_name && (
+                          <p className="text-rose-600 text-[11px] mt-1 font-medium">{formErrors.founder_name}</p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Row 2: Phone & Email */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-slate-700 font-semibold mb-1.5">
+                          Primary Phone Number <span className="text-rose-500">*</span>
+                        </label>
+                        <input
+                          type="tel"
+                          value={formData.founder_phone}
+                          onChange={(e) => setFormData({ ...formData, founder_phone: e.target.value })}
+                          placeholder="e.g. +91 98765 43210"
+                          className={`w-full px-3.5 py-2.5 bg-slate-50 border rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:bg-white transition ${
+                            formErrors.founder_phone ? 'border-rose-400 bg-rose-50/30' : 'border-slate-200'
+                          }`}
+                        />
+                        {formErrors.founder_phone && (
+                          <p className="text-rose-600 text-[11px] mt-1 font-medium">{formErrors.founder_phone}</p>
+                        )}
+                      </div>
+
+                      <div>
+                        <label className="block text-slate-700 font-semibold mb-1.5">
+                          Founder Email Address
+                        </label>
+                        <input
+                          type="email"
+                          value={formData.founder_email}
+                          onChange={(e) => setFormData({ ...formData, founder_email: e.target.value })}
+                          placeholder="e.g. founder@venture.in"
+                          className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:bg-white transition"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Row 3: Company Overview */}
+                    <div>
+                      <label className="block text-slate-700 font-semibold mb-1.5">
+                        Company Overview <span className="text-rose-500">*</span>
+                      </label>
+                      <textarea
+                        rows={3}
+                        value={formData.company_overview}
+                        onChange={(e) => setFormData({ ...formData, company_overview: e.target.value })}
+                        placeholder="Describe the startup's core innovation, product architecture, target market, and value proposition..."
+                        className={`w-full px-3.5 py-2.5 bg-slate-50 border rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:bg-white transition ${
+                          formErrors.company_overview ? 'border-rose-400 bg-rose-50/30' : 'border-slate-200'
+                        }`}
+                      />
+                      {formErrors.company_overview && (
+                        <p className="text-rose-600 text-[11px] mt-1 font-medium">{formErrors.company_overview}</p>
+                      )}
+                    </div>
+
+                    {/* Row 4: Status & Sector */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-slate-700 font-semibold mb-1.5">
+                          Startup Status <span className="text-rose-500">*</span>
+                        </label>
+                        <select
+                          value={formData.status}
+                          onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+                          className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+                        >
+                          <option value="Active">Active (Currently Incubated)</option>
+                          <option value="Alumni">Alumni (Graduated)</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-slate-700 font-semibold mb-1.5">
+                          Innovation Sector
+                        </label>
+                        <select
+                          value={formData.sector}
+                          onChange={(e) => setFormData({ ...formData, sector: e.target.value })}
+                          className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+                        >
+                          <option value="DeepTech & AI">DeepTech &amp; AI</option>
+                          <option value="AgriTech & Edge AI">AgriTech &amp; Edge AI</option>
+                          <option value="HealthTech & BioSensors">HealthTech &amp; BioSensors</option>
+                          <option value="CleanTech & Energy">CleanTech &amp; Energy</option>
+                          <option value="FinTech & Open Networks">FinTech &amp; Open Networks</option>
+                          <option value="DeepTech & Aerospace">DeepTech &amp; Aerospace</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* Row 5: MCA Registration Number & Incorporation Date */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-slate-700 font-semibold mb-1.5">
+                          MCA / CIN Registration Number
+                        </label>
+                        <input
+                          type="text"
+                          value={formData.mca_number}
+                          onChange={(e) => setFormData({ ...formData, mca_number: e.target.value })}
+                          placeholder="e.g. U72900DL2025PTC384910"
+                          className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-slate-700 font-semibold mb-1.5">
+                          Incorporation Date
+                        </label>
+                        <input
+                          type="date"
+                          value={formData.incorporation_date}
+                          onChange={(e) => setFormData({ ...formData, incorporation_date: e.target.value })}
+                          className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Row 6: DPIIT Number & Sanctioned Grant */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-slate-700 font-semibold mb-1.5">
+                          DPIIT Recognition Number
+                        </label>
+                        <input
+                          type="text"
+                          value={formData.dpiit_number}
+                          onChange={(e) => setFormData({ ...formData, dpiit_number: e.target.value })}
+                          placeholder="e.g. DIPP-IN-98214"
+                          className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-slate-700 font-semibold mb-1.5">
+                          Sanctioned Seed Grant (INR)
+                        </label>
+                        <input
+                          type="number"
+                          value={formData.sanctioned_grant}
+                          onChange={(e) => setFormData({ ...formData, sanctioned_grant: e.target.value })}
+                          placeholder="2500000"
+                          className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Form Buttons */}
+                    <div className="pt-4 border-t border-slate-100 flex items-center justify-end space-x-3">
+                      <button
+                        type="button"
+                        onClick={() => setActiveNav('portfolio')}
+                        className="px-5 py-2.5 border border-slate-200 text-slate-700 rounded-xl text-xs font-semibold hover:bg-slate-50 transition"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={formSubmitting}
+                        className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition shadow-xs disabled:opacity-50 flex items-center gap-1.5"
+                      >
+                        {formSubmitting ? (
+                          <span>Saving Record...</span>
+                        ) : editingStartupId ? (
+                          <span>Update Startup Record</span>
+                        ) : (
+                          <span>Save &amp; Enroll Startup</span>
+                        )}
+                      </button>
+                    </div>
+
+                  </form>
+                </div>
+
+              </div>
+            )}
+
+            {/* ================= VIEW 4: DOCUMENTS & COMPLIANCE REPOSITORY ================= */}
+            {activeNav === 'documents' && (
+              <div className="space-y-4">
+                
+                {/* Header card with search & filter */}
+                <div className="p-5 rounded-xl bg-white border border-slate-200/90 shadow-xs space-y-3">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div>
                       <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
                         <FileCheck2 className="w-5 h-5 text-emerald-600" />
-                        <span>Document Repository & Compliance Checklist</span>
+                        <span>Document Repository &amp; Compliance Checklist</span>
                       </h2>
                       <p className="text-xs text-slate-500 mt-1">
                         Track mandatory legal, tax, and government grant compliance documentation across all incubator portfolio companies.
                       </p>
                     </div>
                     <span className="text-xs font-semibold px-3 py-1 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 self-start sm:self-auto">
-                      MCA21 & DPIIT Compliant
+                      MCA21 &amp; DPIIT Compliant
                     </span>
                   </div>
 
                   {docFeedback && (
-                    <div className="mt-4 p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-xs text-emerald-800 flex items-center gap-2">
+                    <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-xs text-emerald-800 flex items-center gap-2">
                       <Check className="w-4 h-4 text-emerald-600" />
                       <span>{docFeedback}</span>
                     </div>
                   )}
-                </div>
 
-                {/* Compliance Checklist per Startup */}
-                <div className="space-y-4">
-                  {startups.map((st) => (
-                    <div key={st.id} className="p-5 rounded-xl bg-white border border-slate-200/90 shadow-xs space-y-4">
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-100 gap-2">
-                        <div>
-                          <div className="flex items-center space-x-2">
-                            <h3 className="font-bold text-slate-900 text-sm">{st.startup_name}</h3>
-                            <span className="text-[10px] font-mono text-slate-500">
-                              {st.mca_number || 'CIN Pending'}
-                            </span>
-                          </div>
-                          <p className="text-xs text-slate-500 mt-0.5">
-                            Founder: {st.founder_name} • Phone: {st.founder_phone}
-                          </p>
-                        </div>
-                        <span
-                          className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border self-start sm:self-auto ${
-                            st.status === 'Alumni'
-                              ? 'bg-blue-50 text-blue-700 border-blue-200'
-                              : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                  {/* Search & Filter Bar */}
+                  <div className="pt-2 border-t border-slate-100 flex flex-col sm:flex-row gap-3 items-center justify-between">
+                    <div className="relative flex-1 w-full">
+                      <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-2.5" />
+                      <input
+                        type="text"
+                        value={docSearch}
+                        onChange={(e) => {
+                          setDocSearch(e.target.value);
+                          setDocPage(1);
+                        }}
+                        placeholder="Search compliance by company name or founder..."
+                        className="w-full pl-9 pr-3.5 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+                      />
+                    </div>
+
+                    <div className="flex items-center bg-slate-100 p-1 rounded-lg text-xs font-semibold w-full sm:w-auto">
+                      {['All', 'Verified', 'Pending'].map((st) => (
+                        <button
+                          key={st}
+                          onClick={() => { setDocStatusFilter(st); setDocPage(1); }}
+                          className={`px-3 py-1 rounded-md transition ${
+                            docStatusFilter === st
+                              ? 'bg-white text-emerald-800 shadow-xs font-bold'
+                              : 'text-slate-500 hover:text-slate-900'
                           }`}
                         >
-                          {st.status || 'Active'}
-                        </span>
-                      </div>
-
-                      {/* Documents Table for this startup */}
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-left text-xs">
-                          <thead className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">
-                            <tr>
-                              <th className="py-2">Required Document</th>
-                              <th className="py-2">Mandatory</th>
-                              <th className="py-2">Status</th>
-                              <th className="py-2">File Uploaded</th>
-                              <th className="py-2 text-right">Verification Action</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-slate-100">
-                            {(st.documents || []).map((doc) => (
-                              <tr key={doc.id} className="hover:bg-slate-50/50">
-                                <td className="py-2.5 font-medium text-slate-900">
-                                  {doc.document_name}
-                                </td>
-                                <td className="py-2.5">
-                                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                                    doc.mandatory ? 'bg-slate-100 text-slate-700' : 'bg-slate-50 text-slate-400'
-                                  }`}>
-                                    {doc.mandatory ? 'Mandatory' : 'Optional'}
-                                  </span>
-                                </td>
-                                <td className="py-2.5">
-                                  <span
-                                    className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
-                                      doc.status === 'Verified'
-                                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                                        : doc.status === 'Under Review'
-                                        ? 'bg-amber-50 text-amber-700 border-amber-200'
-                                        : 'bg-slate-100 text-slate-600 border-slate-200'
-                                    }`}
-                                  >
-                                    {doc.status}
-                                  </span>
-                                </td>
-                                <td className="py-2.5 font-mono text-[11px] text-slate-600">
-                                  {doc.file_name || 'No file uploaded yet'}
-                                </td>
-                                <td className="py-2.5 text-right">
-                                  {doc.status === 'Verified' ? (
-                                    <span className="text-emerald-700 font-semibold text-[11px] inline-flex items-center gap-1">
-                                      <Check className="w-3.5 h-3.5" />
-                                      <span>Verified</span>
-                                    </span>
-                                  ) : (
-                                    <button
-                                      onClick={() => handleUpdateDocStatus(st.id, doc.id, 'Verified')}
-                                      className="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded text-xs font-semibold transition"
-                                    >
-                                      Mark Verified
-                                    </button>
-                                  )}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
+                          {st === 'All' ? 'All Records' : st === 'Verified' ? 'Fully Verified' : 'Action Required'}
+                        </button>
+                      ))}
                     </div>
-                  ))}
+                  </div>
                 </div>
+
+                {/* Compliance Checklist per Startup with Pagination */}
+                {filteredDocStartups.length === 0 ? (
+                  <div className="p-10 text-center bg-white border border-slate-200/90 rounded-xl shadow-xs text-xs text-slate-500">
+                    <FileCheck2 className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                    <p className="font-semibold text-slate-700">No compliance records found</p>
+                    <p className="text-slate-500 mt-0.5">Try clearing search filters or add new startups.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {paginatedDocStartups.map((st) => (
+                      <div key={st.id} className="p-5 rounded-xl bg-white border border-slate-200/90 shadow-xs space-y-4">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-100 gap-2">
+                          <div>
+                            <div className="flex items-center space-x-2">
+                              <h3 className="font-bold text-slate-900 text-sm">{st.startup_name}</h3>
+                              <span className="text-[10px] font-mono text-slate-500">
+                                {st.mca_number || 'CIN Pending'}
+                              </span>
+                            </div>
+                            <p className="text-xs text-slate-500 mt-0.5">
+                              Founder: {st.founder_name} • Phone: {st.founder_phone}
+                            </p>
+                          </div>
+                          <span
+                            className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border self-start sm:self-auto ${
+                              st.status === 'Alumni'
+                                ? 'bg-blue-50 text-blue-700 border-blue-200'
+                                : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                            }`}
+                          >
+                            {st.status || 'Active'}
+                          </span>
+                        </div>
+
+                        {/* Documents Table for this startup */}
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left text-xs">
+                            <thead className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">
+                              <tr>
+                                <th className="py-2">Required Document</th>
+                                <th className="py-2">Mandatory</th>
+                                <th className="py-2">Status</th>
+                                <th className="py-2">File Uploaded</th>
+                                <th className="py-2 text-right">Verification Action</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                              {(st.documents || []).map((doc) => (
+                                <tr key={doc.id} className="hover:bg-slate-50/50">
+                                  <td className="py-2.5 font-medium text-slate-900">
+                                    {doc.document_name}
+                                  </td>
+                                  <td className="py-2.5">
+                                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                      doc.mandatory ? 'bg-slate-100 text-slate-700' : 'bg-slate-50 text-slate-400'
+                                    }`}>
+                                      {doc.mandatory ? 'Mandatory' : 'Optional'}
+                                    </span>
+                                  </td>
+                                  <td className="py-2.5">
+                                    <span
+                                      className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
+                                        doc.status === 'Verified'
+                                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                          : doc.status === 'Under Review'
+                                          ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                          : 'bg-slate-100 text-slate-600 border-slate-200'
+                                      }`}
+                                    >
+                                      {doc.status}
+                                    </span>
+                                  </td>
+                                  <td className="py-2.5 font-mono text-[11px] text-slate-600">
+                                    {doc.file_name || 'No file uploaded yet'}
+                                  </td>
+                                  <td className="py-2.5 text-right">
+                                    {doc.status === 'Verified' ? (
+                                      <span className="text-emerald-700 font-semibold text-[11px] inline-flex items-center gap-1">
+                                        <Check className="w-3.5 h-3.5" />
+                                        <span>Verified</span>
+                                      </span>
+                                    ) : (
+                                      <button
+                                        onClick={() => handleUpdateDocStatus(st.id, doc.id, 'Verified')}
+                                        className="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded text-xs font-semibold transition"
+                                      >
+                                        Mark Verified
+                                      </button>
+                                    )}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    ))}
+
+                    {/* Pagination Bar for Documents */}
+                    <div className="bg-white rounded-xl border border-slate-200/90 shadow-xs overflow-hidden">
+                      <PaginationBar
+                        currentPage={docPage}
+                        totalItems={filteredDocStartups.length}
+                        pageSize={docPageSize}
+                        onPageChange={setDocPage}
+                        onPageSizeChange={setDocPageSize}
+                        itemName="startup compliance records"
+                        pageSizeOptions={[5, 10, 25]}
+                      />
+                    </div>
+                  </div>
+                )}
 
               </div>
             )}
 
-            {/* ================= VIEW 4: COHORT APPLICATIONS ================= */}
+            {/* ================= VIEW 5: COHORT APPLICATIONS ================= */}
             {activeNav === 'applications' && (
               <div className="space-y-4">
-                <div className="p-4 bg-white border border-slate-200/90 rounded-xl shadow-xs flex items-center justify-between text-xs">
-                  <div>
-                    <h3 className="text-sm font-bold text-slate-900">Cohort 13 Admissions Pipeline</h3>
-                    <p className="text-slate-500 mt-0.5">Evaluating new innovation proposals for upcoming cohort intake.</p>
+                
+                {/* Header Toolbar */}
+                <div className="p-4 bg-white border border-slate-200/90 rounded-xl shadow-xs space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                    <div>
+                      <h3 className="text-sm font-bold text-slate-900">Cohort Admissions Pipeline</h3>
+                      <p className="text-slate-500 mt-0.5">Evaluating new innovation proposals for upcoming cohort intake.</p>
+                    </div>
+                    <span className="px-3 py-1 rounded-full bg-slate-100 text-slate-700 font-bold self-start sm:self-auto">
+                      {applications.length} Submissions
+                    </span>
                   </div>
-                  <span className="px-3 py-1 rounded-full bg-slate-100 text-slate-700 font-bold">
-                    {applications.length} Submissions
-                  </span>
+
+                  {/* Search & Filter */}
+                  <div className="pt-2 border-t border-slate-100 flex flex-col sm:flex-row gap-3 items-center justify-between">
+                    <div className="relative flex-1 w-full">
+                      <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-2.5" />
+                      <input
+                        type="text"
+                        value={appSearch}
+                        onChange={(e) => {
+                          setAppSearch(e.target.value);
+                          setAppPage(1);
+                        }}
+                        placeholder="Search proposals by startup name, founder, or sector..."
+                        className="w-full pl-9 pr-3.5 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+                      />
+                    </div>
+
+                    <div className="flex flex-wrap items-center bg-slate-100 p-1 rounded-lg text-xs font-semibold w-full sm:w-auto">
+                      {['All', 'Under Review', 'Interview Scheduled', 'Accepted', 'Rejected'].map((st) => (
+                        <button
+                          key={st}
+                          onClick={() => { setAppStatusFilter(st); setAppPage(1); }}
+                          className={`px-2.5 py-1 rounded-md transition ${
+                            appStatusFilter === st
+                              ? 'bg-white text-emerald-800 shadow-xs font-bold'
+                              : 'text-slate-500 hover:text-slate-900'
+                          }`}
+                        >
+                          {st}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 </div>
 
-                <div className="grid grid-cols-1 gap-4">
-                  {applications.map((app) => (
-                    <div
-                      key={app.id}
-                      className="p-5 rounded-xl bg-white border border-slate-200/90 shadow-xs hover:border-slate-300 transition space-y-3"
-                    >
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                        <div>
-                          <div className="flex items-center space-x-2">
-                            <h4 className="text-sm font-bold text-slate-900">{app.startup_name}</h4>
-                            <span className="text-[10px] font-mono px-2 py-0.5 bg-slate-100 text-slate-600 rounded">
-                              {app.dpiit_number || 'DPIIT Pending'}
-                            </span>
-                            <span
-                              className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                                app.status === 'Accepted'
-                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                                  : app.status === 'Interview Scheduled'
-                                  ? 'bg-blue-50 text-blue-700 border-blue-200'
-                                  : app.status === 'Rejected'
-                                  ? 'bg-rose-50 text-rose-700 border-rose-200'
-                                  : 'bg-amber-50 text-amber-700 border-amber-200'
-                              }`}
-                            >
-                              {app.status}
-                            </span>
+                {filteredApplications.length === 0 ? (
+                  <div className="p-10 text-center bg-white border border-slate-200/90 rounded-xl shadow-xs text-xs text-slate-500">
+                    <FileText className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                    <p className="font-semibold text-slate-700">No applications match your filter</p>
+                    <p className="text-slate-500 mt-0.5">Try adjusting status or search terms.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-1 gap-4">
+                      {paginatedApplications.map((app) => (
+                        <div
+                          key={app.id}
+                          className="p-5 rounded-xl bg-white border border-slate-200/90 shadow-xs hover:border-slate-300 transition space-y-3"
+                        >
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                            <div>
+                              <div className="flex items-center space-x-2">
+                                <h4 className="text-sm font-bold text-slate-900">{app.startup_name}</h4>
+                                <span className="text-[10px] font-mono px-2 py-0.5 bg-slate-100 text-slate-600 rounded">
+                                  {app.dpiit_number || 'DPIIT Pending'}
+                                </span>
+                                <span
+                                  className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                                    app.status === 'Accepted'
+                                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                      : app.status === 'Interview Scheduled'
+                                      ? 'bg-blue-50 text-blue-700 border-blue-200'
+                                      : app.status === 'Rejected'
+                                      ? 'bg-rose-50 text-rose-700 border-rose-200'
+                                      : 'bg-amber-50 text-amber-700 border-amber-200'
+                                  }`}
+                                >
+                                  {app.status}
+                                </span>
+                              </div>
+                              <p className="text-xs text-slate-500 mt-1">
+                                Founder: <strong className="text-slate-700">{app.founder_name}</strong> • Sector:{' '}
+                                <span className="text-emerald-700 font-medium">{app.sector}</span> • Phone: {app.founder_phone}
+                              </p>
+                            </div>
+
+                            <div className="flex items-center space-x-2 shrink-0">
+                              <button
+                                onClick={() => handleAppStatusChange(app.id, 'Accepted')}
+                                className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold transition"
+                              >
+                                Accept
+                              </button>
+                              <button
+                                onClick={() => handleAppStatusChange(app.id, 'Interview Scheduled')}
+                                className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg text-xs font-semibold transition"
+                              >
+                                Interview
+                              </button>
+                              <button
+                                onClick={() => handleAppStatusChange(app.id, 'Rejected')}
+                                className="px-3 py-1.5 bg-slate-50 hover:bg-rose-50 text-rose-600 rounded-lg text-xs font-semibold transition"
+                              >
+                                Decline
+                              </button>
+                            </div>
                           </div>
-                          <p className="text-xs text-slate-500 mt-1">
-                            Founder: <strong className="text-slate-700">{app.founder_name}</strong> • Sector:{' '}
-                            <span className="text-emerald-700 font-medium">{app.sector}</span> • Phone: {app.founder_phone}
+
+                          <p className="text-xs text-slate-600 bg-slate-50 p-3 rounded-lg border border-slate-200/80 leading-relaxed">
+                            "{app.pitch_summary}"
                           </p>
                         </div>
-
-                        <div className="flex items-center space-x-2 shrink-0">
-                          <button
-                            onClick={() => handleAppStatusChange(app.id, 'Accepted')}
-                            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold transition"
-                          >
-                            Accept
-                          </button>
-                          <button
-                            onClick={() => handleAppStatusChange(app.id, 'Interview Scheduled')}
-                            className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg text-xs font-semibold transition"
-                          >
-                            Interview
-                          </button>
-                          <button
-                            onClick={() => handleAppStatusChange(app.id, 'Rejected')}
-                            className="px-3 py-1.5 bg-slate-50 hover:bg-rose-50 text-rose-600 rounded-lg text-xs font-semibold transition"
-                          >
-                            Decline
-                          </button>
-                        </div>
-                      </div>
-
-                      <p className="text-xs text-slate-600 bg-slate-50 p-3 rounded-lg border border-slate-200/80 leading-relaxed">
-                        "{app.pitch_summary}"
-                      </p>
+                      ))}
                     </div>
-                  ))}
-                </div>
+
+                    {/* Pagination Bar for Applications */}
+                    <div className="bg-white rounded-xl border border-slate-200/90 shadow-xs overflow-hidden">
+                      <PaginationBar
+                        currentPage={appPage}
+                        totalItems={filteredApplications.length}
+                        pageSize={appPageSize}
+                        onPageChange={setAppPage}
+                        onPageSizeChange={setAppPageSize}
+                        itemName="applications"
+                        pageSizeOptions={[5, 10, 25]}
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
-          </main>
-
-        </div>
+          </div>
+        </main>
 
       </div>
 
-      {/* ================= DETAILS MODAL FOR A STARTUP ================= */}
+      {/* ================= POPUP DETAILS MODAL FOR A STARTUP ================= */}
       {selectedStartup && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs overflow-y-auto">
           <div className="relative w-full max-w-2xl bg-white border border-slate-200 rounded-2xl shadow-xl p-6 sm:p-8 my-8 text-slate-900 max-h-[90vh] overflow-y-auto">
@@ -1297,6 +1765,7 @@ export default function AdminDashboard({ user, onLogout }) {
             <button
               onClick={() => setSelectedStartup(null)}
               className="absolute top-5 right-5 p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100 transition"
+              aria-label="Close modal"
             >
               <X className="w-5 h-5" />
             </button>
@@ -1354,7 +1823,7 @@ export default function AdminDashboard({ user, onLogout }) {
                 </div>
 
                 <div className="p-3 bg-slate-50 rounded-lg border border-slate-200/80 space-y-1">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase">Incorporation & MCA</span>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase">Incorporation &amp; MCA</span>
                   <p className="font-bold text-slate-900">{selectedStartup.incorporation_status}</p>
                   <p className="text-slate-600 font-mono text-[11px]">CIN / MCA: {selectedStartup.mca_number || 'Pending'}</p>
                   <p className="text-slate-500 text-[11px]">
@@ -1413,8 +1882,9 @@ export default function AdminDashboard({ user, onLogout }) {
             <div className="pt-4 border-t border-slate-100 flex items-center justify-between">
               <button
                 onClick={() => {
+                  const toEdit = selectedStartup;
                   setSelectedStartup(null);
-                  handleOpenEdit(selectedStartup);
+                  handleOpenEdit(toEdit);
                 }}
                 className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition"
               >
@@ -1430,259 +1900,6 @@ export default function AdminDashboard({ user, onLogout }) {
               </button>
             </div>
 
-          </div>
-        </div>
-      )}
-
-      {/* ================= ADD / EDIT STARTUP FORM MODAL ================= */}
-      {isFormModalOpen && (
-        <div className="fixed inset-0 lg:left-64 z-50 bg-[#F8FAFC] overflow-y-auto">
-          <div className="min-h-full w-full bg-white text-slate-900">
-            <div className="sticky top-0 z-10 flex items-center justify-between gap-4 border-b border-slate-200 bg-white/95 px-5 py-4 backdrop-blur sm:px-8 lg:px-10">
-              <div>
-                <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                  <Building2 className="w-5 h-5 text-emerald-600" />
-                  <span>{editingStartupId ? 'Edit Startup Record' : 'Add New Startup to Portfolio'}</span>
-                </h3>
-                <p className="text-xs text-slate-500 mt-1">
-                  Enter company incorporation details, founder contacts, and incubation status.
-                </p>
-              </div>
-              <button
-                onClick={() => setIsFormModalOpen(false)}
-                aria-label="Close startup form"
-                className="shrink-0 p-2 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100 transition"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="mx-auto w-full max-w-5xl px-5 py-6 sm:px-8 sm:py-8 lg:px-10">
-
-            {formFeedback && (
-              <div
-                className={`mb-4 p-3 rounded-lg text-xs border flex items-center gap-2 ${
-                  formFeedback.type === 'success'
-                    ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
-                    : 'bg-rose-50 border-rose-200 text-rose-800'
-                }`}
-              >
-                {formFeedback.type === 'success' ? <Check className="w-4 h-4 text-emerald-600" /> : <AlertCircle className="w-4 h-4 text-rose-600" />}
-                <span>{formFeedback.message}</span>
-              </div>
-            )}
-
-            <form onSubmit={handleSaveStartup} className="space-y-5 text-xs">
-              
-              {/* Row 1: Company Name & Founder Name */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-slate-700 font-semibold mb-1">
-                    Company / Startup Name <span className="text-rose-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.startup_name}
-                    onChange={(e) => setFormData({ ...formData, startup_name: e.target.value })}
-                    placeholder="e.g. KisanSetu DeepTech Labs"
-                    className={`w-full px-3 py-2 bg-slate-50 border rounded-lg text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 ${
-                      formErrors.startup_name ? 'border-rose-400 bg-rose-50/30' : 'border-slate-200'
-                    }`}
-                  />
-                  {formErrors.startup_name && (
-                    <p className="text-rose-600 text-[11px] mt-1">{formErrors.startup_name}</p>
-                  )}
-                </div>
-
-                <div>
-                  <label className="block text-slate-700 font-semibold mb-1">
-                    Founder Name <span className="text-rose-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.founder_name}
-                    onChange={(e) => setFormData({ ...formData, founder_name: e.target.value })}
-                    placeholder="e.g. Aarav Sharma"
-                    className={`w-full px-3 py-2 bg-slate-50 border rounded-lg text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 ${
-                      formErrors.founder_name ? 'border-rose-400 bg-rose-50/30' : 'border-slate-200'
-                    }`}
-                  />
-                  {formErrors.founder_name && (
-                    <p className="text-rose-600 text-[11px] mt-1">{formErrors.founder_name}</p>
-                  )}
-                </div>
-              </div>
-
-              {/* Row 2: Phone & Email */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-slate-700 font-semibold mb-1">
-                    Primary Phone Number <span className="text-rose-500">*</span>
-                  </label>
-                  <input
-                    type="tel"
-                    value={formData.founder_phone}
-                    onChange={(e) => setFormData({ ...formData, founder_phone: e.target.value })}
-                    placeholder="e.g. +91 98765 43210"
-                    className={`w-full px-3 py-2 bg-slate-50 border rounded-lg text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 ${
-                      formErrors.founder_phone ? 'border-rose-400 bg-rose-50/30' : 'border-slate-200'
-                    }`}
-                  />
-                  {formErrors.founder_phone && (
-                    <p className="text-rose-600 text-[11px] mt-1">{formErrors.founder_phone}</p>
-                  )}
-                </div>
-
-                <div>
-                  <label className="block text-slate-700 font-semibold mb-1">
-                    Founder Email Address
-                  </label>
-                  <input
-                    type="email"
-                    value={formData.founder_email}
-                    onChange={(e) => setFormData({ ...formData, founder_email: e.target.value })}
-                    placeholder="e.g. founder@venture.in"
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
-                  />
-                </div>
-              </div>
-
-              {/* Row 3: Company Overview */}
-              <div>
-                <label className="block text-slate-700 font-semibold mb-1">
-                  Company Overview <span className="text-rose-500">*</span>
-                </label>
-                <textarea
-                  rows={3}
-                  value={formData.company_overview}
-                  onChange={(e) => setFormData({ ...formData, company_overview: e.target.value })}
-                  placeholder="Describe the startup's product, innovation, target problem, and market..."
-                  className={`w-full px-3 py-2 bg-slate-50 border rounded-lg text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 ${
-                    formErrors.company_overview ? 'border-rose-400 bg-rose-50/30' : 'border-slate-200'
-                  }`}
-                />
-                {formErrors.company_overview && (
-                  <p className="text-rose-600 text-[11px] mt-1">{formErrors.company_overview}</p>
-                )}
-              </div>
-
-              {/* Row 4: Status & Sector */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-slate-700 font-semibold mb-1">
-                    Startup Status <span className="text-rose-500">*</span>
-                  </label>
-                  <select
-                    value={formData.status}
-                    onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-900 focus:outline-none"
-                  >
-                    <option value="Active">Active (Currently Incubated)</option>
-                    <option value="Alumni">Alumni (Graduated)</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-slate-700 font-semibold mb-1">
-                    Innovation Sector
-                  </label>
-                  <select
-                    value={formData.sector}
-                    onChange={(e) => setFormData({ ...formData, sector: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-900 focus:outline-none"
-                  >
-                    <option value="DeepTech & AI">DeepTech & AI</option>
-                    <option value="AgriTech & Edge AI">AgriTech & Edge AI</option>
-                    <option value="HealthTech & BioSensors">HealthTech & BioSensors</option>
-                    <option value="CleanTech & Energy">CleanTech & Energy</option>
-                    <option value="FinTech & Open Networks">FinTech & Open Networks</option>
-                    <option value="DeepTech & Aerospace">DeepTech & Aerospace</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Row 5: MCA Registration Number & Incorporation Date */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-slate-700 font-semibold mb-1">
-                    MCA / CIN Registration Number
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.mca_number}
-                    onChange={(e) => setFormData({ ...formData, mca_number: e.target.value })}
-                    placeholder="e.g. U72900DL2025PTC384910"
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-900 font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-slate-700 font-semibold mb-1">
-                    Incorporation Date
-                  </label>
-                  <input
-                    type="date"
-                    value={formData.incorporation_date}
-                    onChange={(e) => setFormData({ ...formData, incorporation_date: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-900 focus:outline-none"
-                  />
-                </div>
-              </div>
-
-              {/* Row 6: DPIIT Number & Sanctioned Grant */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-slate-700 font-semibold mb-1">
-                    DPIIT Recognition Number
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.dpiit_number}
-                    onChange={(e) => setFormData({ ...formData, dpiit_number: e.target.value })}
-                    placeholder="e.g. DIPP-IN-98214"
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-900 font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-slate-700 font-semibold mb-1">
-                    Sanctioned Seed Grant (INR)
-                  </label>
-                  <input
-                    type="number"
-                    value={formData.sanctioned_grant}
-                    onChange={(e) => setFormData({ ...formData, sanctioned_grant: e.target.value })}
-                    placeholder="2500000"
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-900 focus:outline-none"
-                  />
-                </div>
-              </div>
-
-              {/* Form Buttons */}
-              <div className="pt-3 border-t border-slate-100 flex items-center justify-end space-x-2">
-                <button
-                  type="button"
-                  onClick={() => setIsFormModalOpen(false)}
-                  className="px-4 py-2 border border-slate-200 text-slate-600 rounded-lg text-xs font-semibold hover:bg-slate-50 transition"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={formSubmitting}
-                  className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition shadow-xs disabled:opacity-50"
-                >
-                  {formSubmitting
-                    ? 'Saving Record...'
-                    : editingStartupId
-                    ? 'Update Startup Record'
-                    : 'Save & Enroll Startup'}
-                </button>
-              </div>
-
-            </form>
-
-            </div>
           </div>
         </div>
       )}

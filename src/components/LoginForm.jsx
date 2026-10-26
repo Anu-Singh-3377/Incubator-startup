@@ -21,9 +21,9 @@ export default function LoginForm({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={handleSubmit} className="space-y-3">
       {error && (
-        <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 flex items-start space-x-2.5 text-xs text-rose-800">
+        <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 flex items-start space-x-2 text-xs text-rose-800">
           <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
           <span>{error}</span>
         </div>
@@ -31,7 +31,7 @@ export default function LoginForm({
 
       {/* Email / Official Username */}
       <div>
-        <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+        <label className="block text-xs font-semibold text-slate-700 mb-1">
           Official Email Address
         </label>
         <div className="relative">
@@ -43,15 +43,15 @@ export default function LoginForm({
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
-            placeholder="e.g. founder@venturebharat.in"
-            className="w-full pl-9 pr-3.5 py-3 bg-white border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-600/20 focus:border-emerald-600 transition"
+            placeholder={role === 'admin' ? 'director@incubator.in' : 'founder@startup.in'}
+            className="w-full pl-9 pr-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-600/20 focus:border-emerald-600 transition"
           />
         </div>
       </div>
 
       {/* Password */}
       <div>
-        <div className="flex items-center justify-between mb-1.5">
+        <div className="flex items-center justify-between mb-1">
           <label className="text-xs font-semibold text-slate-700">
             Portal Password
           </label>
@@ -73,12 +73,13 @@ export default function LoginForm({
             onChange={(e) => setPassword(e.target.value)}
             required
             placeholder="••••••••••••"
-            className="w-full pl-9 pr-10 py-3 bg-white border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-600/20 focus:border-emerald-600 transition"
+            className="w-full pl-9 pr-10 py-2.5 bg-white border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-600/20 focus:border-emerald-600 transition"
           />
           <button
             type="button"
             onClick={() => setShowPassword(!showPassword)}
             className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-700 transition"
+            aria-label={showPassword ? 'Hide password' : 'Show password'}
           >
             {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
           </button>
@@ -86,7 +87,7 @@ export default function LoginForm({
       </div>
 
       {/* Remember me & Security Info */}
-      <div className="flex flex-wrap items-center justify-between gap-2 text-xs pt-1">
+      <div className="flex flex-wrap items-center justify-between gap-2 text-xs pt-0.5">
         <label className="flex items-center space-x-2 text-slate-500 hover:text-slate-700 cursor-pointer">
           <input
             type="checkbox"
@@ -96,14 +97,14 @@ export default function LoginForm({
           />
           <span>Remember login on this device</span>
         </label>
-        <span className="text-[11px] text-slate-400">Secure sign in</span>
+        <span className="text-[11px] text-slate-400">256-bit encrypted</span>
       </div>
 
       {/* Submit Button */}
       <button
         type="submit"
         disabled={loading}
-        className="w-full mt-2 py-3 px-4 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-semibold text-sm flex items-center justify-center space-x-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        className="w-full mt-1.5 py-2.5 px-4 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-semibold text-sm flex items-center justify-center space-x-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
       >
         {loading ? (
           <>
@@ -120,4 +121,3 @@ export default function LoginForm({
     </form>
   );
 }
-
