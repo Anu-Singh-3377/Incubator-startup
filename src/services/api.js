@@ -1,3 +1,5 @@
+import { supabase } from '../lib/supabaseClient';
+
 // API service for interacting with the Express backend
 
 const BASE_URL = '/api';
@@ -138,15 +140,21 @@ export const communicationApi = {
   },
 
   sendBroadcast: async (payload) => {
+    const { data: { session } } = await supabase?.auth.getSession() || { data: { session: null } };
+    if (!session?.access_token) throw new Error('Please sign in with an authorized administrator account.');
     return await request('/communication/send', {
       method: 'POST',
+      headers: { Authorization: `Bearer ${session.access_token}` },
       body: JSON.stringify(payload)
     });
   },
 
   sendTestEmail: async ({ testEmail, subject, htmlBody }) => {
+    const { data: { session } } = await supabase?.auth.getSession() || { data: { session: null } };
+    if (!session?.access_token) throw new Error('Please sign in with an authorized administrator account.');
     return await request('/communication/test', {
       method: 'POST',
+      headers: { Authorization: `Bearer ${session.access_token}` },
       body: JSON.stringify({ testEmail, subject, htmlBody })
     });
   }

@@ -155,6 +155,13 @@ export default function AdminDashboard({ user, onLogout }) {
   // Selected Startup for Details Modal
   const [selectedStartup, setSelectedStartup] = useState(null);
 
+  // Add Authorized Administrator Modal State (Strictly for existing Admins)
+  const [addAdminOpen, setAddAdminOpen] = useState(false);
+  const [addAdminForm, setAddAdminForm] = useState({ full_name: '', email: '', phone: '', password: '', designation: '' });
+  const [addAdminLoading, setAddAdminLoading] = useState(false);
+  const [addAdminError, setAddAdminError] = useState('');
+  const [addAdminSuccess, setAddAdminSuccess] = useState('');
+
   // Add / Edit Startup Form State (Dedicated Page)
   const [editingStartupId, setEditingStartupId] = useState(null);
   const [formData, setFormData] = useState({
@@ -621,11 +628,11 @@ export default function AdminDashboard({ user, onLogout }) {
               className="flex items-center space-x-2 pl-2 border-l border-slate-200 text-left hover:opacity-90 transition"
             >
               <div className="w-8 h-8 rounded-full bg-emerald-100 border border-emerald-300 text-emerald-800 font-bold flex items-center justify-center text-xs">
-                {user?.full_name ? user.full_name[0] : 'V'}
+                {user?.full_name ? user.full_name[0].toUpperCase() : 'A'}
               </div>
               <div className="hidden xl:block">
                 <p className="text-xs font-bold text-slate-900 leading-tight">
-                  {user?.full_name || 'Incubation Director'}
+                  {user?.full_name || 'Admin'}
                 </p>
                 <p className="text-[10px] text-slate-500 capitalize">
                   {user?.role || 'Admin'}
@@ -637,12 +644,20 @@ export default function AdminDashboard({ user, onLogout }) {
             {profileDropdownOpen && (
               <div className="absolute right-0 mt-2 w-56 bg-white border border-slate-200 rounded-xl shadow-lg p-2 z-40 text-xs">
                 <div className="px-3 py-2 border-b border-slate-100 mb-1">
-                  <p className="font-bold text-slate-900">{user?.full_name || 'Incubation Director'}</p>
+                  <p className="font-bold text-slate-900">{user?.full_name || 'Admin'}</p>
                   <p className="text-[11px] text-slate-500 font-mono truncate">{user?.email}</p>
                   <span className="inline-block mt-1 px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                    Incubator Directorate
+                    Authorized Administrator
                   </span>
                 </div>
+
+                <button
+                  onClick={() => { setAddAdminOpen(true); setProfileDropdownOpen(false); }}
+                  className="w-full flex items-center space-x-2 px-3 py-2 text-slate-700 hover:bg-slate-50 rounded-lg transition font-medium text-left"
+                >
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Add Administrator</span>
+                </button>
 
                 <button
                   onClick={onLogout}
@@ -836,6 +851,21 @@ export default function AdminDashboard({ user, onLogout }) {
               <span>Support Requests</span>
             </button>
           </nav>
+
+          {/* Sidebar Administrator Identity Footer */}
+          <div className="p-3.5 border-t border-slate-100 bg-slate-50/70 mt-auto shrink-0 flex items-center space-x-2.5">
+            <div className="w-8 h-8 rounded-full bg-emerald-700 text-white font-bold flex items-center justify-center text-xs shrink-0 shadow-xs">
+              {user?.full_name ? user.full_name[0].toUpperCase() : 'A'}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-bold text-slate-800 truncate leading-tight">
+                {user?.full_name || 'Admin'}
+              </p>
+              <p className="text-[10px] text-emerald-700 font-semibold truncate">
+                Authorized Administrator
+              </p>
+            </div>
+          </div>
         </aside>
 
         {/* Mobile Navigation Drawer */}
@@ -1016,7 +1046,7 @@ export default function AdminDashboard({ user, onLogout }) {
                       <span>Portfolio Management System Active</span>
                     </div>
                     <h2 className="text-xl sm:text-2xl font-black tracking-tight leading-snug">
-                      Welcome, {user?.full_name || 'Incubation Director'}
+                      Welcome, {user?.full_name || 'Admin'}
                     </h2>
                     <p className="text-xs sm:text-sm text-emerald-100 mt-1.5 leading-relaxed">
                       Monitor active deeptech ventures, manage MCA compliance and government seed grants, and support innovative founders from lab to market.
@@ -2248,6 +2278,135 @@ export default function AdminDashboard({ user, onLogout }) {
               </button>
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* ================= ADD ADMINISTRATOR MODAL (Authorized Admins Only) ================= */}
+      {addAdminOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
+          <div className="relative w-full max-w-md bg-white border border-slate-200 rounded-2xl shadow-xl p-5 text-slate-800">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
+              <div className="flex items-center space-x-2">
+                <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center">
+                  <ShieldCheck className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">Add Authorized Administrator</h3>
+                  <p className="text-[11px] text-slate-500">Restricted to Incubation Directorate</p>
+                </div>
+              </div>
+              <button
+                onClick={() => { setAddAdminOpen(false); setAddAdminError(''); setAddAdminSuccess(''); }}
+                className="p-1 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {addAdminError && (
+              <div className="mb-3 p-2.5 rounded-lg bg-rose-50 border border-rose-200 text-xs text-rose-800 flex items-center space-x-2">
+                <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+                <span>{addAdminError}</span>
+              </div>
+            )}
+
+            {addAdminSuccess && (
+              <div className="mb-3 p-2.5 rounded-lg bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 flex items-center space-x-2">
+                <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
+                <span>{addAdminSuccess}</span>
+              </div>
+            )}
+
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                try {
+                  setAddAdminLoading(true);
+                  setAddAdminError('');
+                  setAddAdminSuccess('');
+                  const res = await supabaseService.createAdminUser(addAdminForm);
+                  setAddAdminSuccess(res.message || 'Administrator created successfully.');
+                  setAddAdminForm({ full_name: '', email: '', phone: '', password: '', designation: '' });
+                } catch (err) {
+                  setAddAdminError(err.message || 'Account creation failed. Please check the details and try again.');
+                } finally {
+                  setAddAdminLoading(false);
+                }
+              }}
+              className="space-y-3"
+            >
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Full Name</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Dr. Ramesh Gupta"
+                  value={addAdminForm.full_name}
+                  onChange={(e) => setAddAdminForm({ ...addAdminForm, full_name: e.target.value })}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-emerald-600"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Official Email</label>
+                <input
+                  type="email"
+                  required
+                  placeholder="director@incubator.in"
+                  value={addAdminForm.email}
+                  onChange={(e) => setAddAdminForm({ ...addAdminForm, email: e.target.value })}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-emerald-600"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Contact Phone</label>
+                <input
+                  type="tel"
+                  placeholder="+91 99000 11223"
+                  value={addAdminForm.phone}
+                  onChange={(e) => setAddAdminForm({ ...addAdminForm, phone: e.target.value })}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-emerald-600"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Designation</label>
+                <input
+                  type="text"
+                  placeholder="Incubation Director & Program Officer"
+                  value={addAdminForm.designation}
+                  onChange={(e) => setAddAdminForm({ ...addAdminForm, designation: e.target.value })}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-emerald-600"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Initial Password (min. 6 characters)</label>
+                <input
+                  type="password"
+                  required
+                  minLength={6}
+                  placeholder="••••••••••••"
+                  value={addAdminForm.password}
+                  onChange={(e) => setAddAdminForm({ ...addAdminForm, password: e.target.value })}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-emerald-600"
+                />
+              </div>
+              <div className="pt-2 flex justify-end space-x-2">
+                <button
+                  type="button"
+                  onClick={() => setAddAdminOpen(false)}
+                  className="px-3 py-1.5 rounded-lg border border-slate-200 text-xs text-slate-600 hover:bg-slate-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={addAdminLoading}
+                  className="px-4 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white font-semibold text-xs transition disabled:opacity-50"
+                >
+                  {addAdminLoading ? 'Authorizing & Creating...' : 'Create Admin Account'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

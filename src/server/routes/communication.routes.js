@@ -1,4 +1,5 @@
 import express from 'express';
+import { verifySupabaseAdmin } from '../middleware/auth.middleware.js';
 
 const router = express.Router();
 
@@ -28,7 +29,7 @@ router.get('/status', (req, res) => {
 /**
  * Send an email broadcast via Resend API
  */
-router.post('/send', async (req, res) => {
+router.post('/send', verifySupabaseAdmin, async (req, res) => {
   try {
     const { recipients, subject, htmlBody, audienceFilter, templateId, isTest } = req.body;
 
@@ -118,7 +119,7 @@ router.post('/send', async (req, res) => {
 /**
  * Send a single test email
  */
-router.post('/test', async (req, res) => {
+router.post('/test', verifySupabaseAdmin, async (req, res) => {
   try {
     const { testEmail, subject, htmlBody } = req.body;
 

@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+const supabaseUrl = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_SUPABASE_URL) || (typeof process !== 'undefined' && process.env?.VITE_SUPABASE_URL) || '';
+const supabaseAnonKey = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_SUPABASE_ANON_KEY) || (typeof process !== 'undefined' && process.env?.VITE_SUPABASE_ANON_KEY) || '';
 
 // Detect if valid Supabase configuration is present
 export const isSupabaseConfigured = Boolean(
@@ -15,6 +15,19 @@ export const isSupabaseConfigured = Boolean(
 export const supabase = isSupabaseConfigured
   ? createClient(supabaseUrl, supabaseAnonKey)
   : null;
+
+if (typeof window !== 'undefined') {
+  if (isSupabaseConfigured) {
+    console.info(`[VentureBharat Auth] Connected to live Supabase backend: ${supabaseUrl}`);
+  } else {
+    console.warn(
+      '[VentureBharat Auth] Supabase is not configured.\n' +
+      '-> Live Supabase keys (VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY) are not configured in your .env file.\n' +
+      '-> Password authentication and registration are disabled until Supabase credentials are configured.\n' +
+      '-> Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to .env and restart the app.'
+    );
+  }
+}
 
 // Initial pre-seeded mock database for zero-config evaluation
 const DEFAULT_COMPLIANCE_DOCS = [
@@ -864,163 +877,235 @@ const MOCK_CALLBACK_REQUESTS = [
 
 // Unified Supabase Service
 export const supabaseService = {
-  // Sign In with email & password
-  async signIn({ email, password, role }) {
+  // Subscribe to Auth State Changes
+  onAuthStateChange(callback) {
     if (isSupabaseConfigured && supabase) {
+      const { data: { subscription } } = supabase.auth.onAuthStateChange(callback);
+      return () => subscription.unsubscribe();
+    }
+    return () => {};
+  },
+
+  // Strict Sign In with email & password and post-authentication role authorization check
+  async signIn({ email, password, role }) {
+    if (!email || !email.trim() || !password) {
+      throw new Error('Please enter both your registered official email and password.');
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+
+    if (!isSupabaseConfigured || !supabase) {
+      throw new Error('Authentication is unavailable. Configure the Supabase project URL and publishable key, then reload.');
+    }
+
+    {
+      console.log(`[Supabase Auth] Executing signInWithPassword for: "${cleanEmail}" on gateway: "${role}"`);
+
+      // Step 1: Strict credential authentication via Supabase Auth
       const { data, error } = await supabase.auth.signInWithPassword({
-        email,
+        email: cleanEmail,
         password
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error('[Supabase Auth] Authentication error:', {
+          status: error.status,
+          message: error.message
+        });
 
-      // Fetch user profile from public.profiles
-      const { data: profile, error: profileErr } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', data.user.id)
-        .single();
+        const errMsg = (error.message || '').toLowerCase();
 
-      if (profileErr && profileErr.code !== 'PGRST116') {
-        console.warn('Profile fetch note:', profileErr.message);
+        // 1.1 Unconfirmed email check (must be checked BEFORE generic status 400 check!)
+        if (errMsg.includes('email not confirmed') || errMsg.includes('not confirmed')) {
+          throw new Error('Your email needs verification.');
+        }
+
+        // 1.2 Rate Limiting
+        if (error.status === 429 || errMsg.includes('too many requests') || errMsg.includes('rate limit')) {
+          throw new Error('Too many failed login attempts. Please wait a few minutes before trying again.');
+        }
+
+        // 1.3 Invalid credentials / user not found / bad grant
+        if (
+          errMsg.includes('invalid login credentials') ||
+          errMsg.includes('invalid grant') ||
+          errMsg.includes('invalid password') ||
+          errMsg.includes('user not found') ||
+          error.status === 400
+        ) {
+          throw new Error('Invalid email or password.');
+        }
+
+        // 1.4 Network / connection error
+        if (errMsg.includes('failed to fetch') || errMsg.includes('network') || error.status === 0) {
+          throw new Error('Unable to verify your access. Please try again.');
+        }
+
+        throw new Error(error.message || 'Invalid email or password.');
       }
 
-      const userRole = profile?.role || data.user.user_metadata?.role || role || 'startup';
+      if (!data?.user) {
+        throw new Error('Invalid email or password.');
+      }
 
-      // Check role enforcement if selected on UI
-      if (role && role !== userRole) {
-        throw new Error(
-          `Access restricted: This account is registered as '${userRole.toUpperCase()}', not '${role.toUpperCase()}'. Please select the matching login tab.`
-        );
+      if (!['admin', 'startup'].includes(role)) {
+        await supabase.auth.signOut();
+        throw new Error('Select a valid portal.');
+      }
+
+      const { data: profile, error: profileErr } = await supabase
+        .from('profiles')
+        .select('id, email, full_name, role, phone, designation, organization, is_active')
+        .eq('id', data.user.id)
+        .maybeSingle();
+      if (profileErr || !profile || profile.id !== data.user.id || profile.role !== role || profile.is_active === false) {
+        await supabase.auth.signOut();
+        if (typeof localStorage !== 'undefined') {
+          localStorage.removeItem('vb_active_user');
+        }
+        if (role === 'admin') throw new Error('This account is not authorized for the Admin Portal.');
+        throw new Error('This account is not authorized for the Startup Innovator Portal.');
       }
 
       const activeUser = {
         id: data.user.id,
         email: data.user.email,
-        role: userRole,
-        full_name: profile?.full_name || data.user.user_metadata?.full_name || email.split('@')[0],
-        phone: profile?.phone || data.user.user_metadata?.phone || '+91 98765 43210',
-        designation: profile?.designation,
-        organization: profile?.organization,
+        role: profile.role,
+        full_name: profile.full_name || data.user.email.split('@')[0],
+        phone: profile.phone || '',
+        designation: profile.designation || '',
+        organization: profile.organization || '',
         isSupabase: true
       };
 
-      localStorage.setItem('vb_active_user', JSON.stringify(activeUser));
+      console.log(`[Supabase Auth] Login granted for ${cleanEmail} (Gateway: ${role}, Role: ${profile.role})`);
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('vb_active_user', JSON.stringify(activeUser));
+      }
       return { success: true, user: activeUser };
     }
-
-    // Demo Mode fallback for immediate testing
-    const demoAccounts = {
-      'founder@venturebharat.in': {
-        id: 'usr_founder_01',
-        email: 'founder@venturebharat.in',
-        role: 'startup',
-        full_name: 'Aarav Sharma',
-        phone: '+91 98765 43210',
-        startup_name: 'KisanSetu DeepTech Labs',
-        dpiit_number: 'DIPP-IN-98214',
-        sector: 'AgriTech & Edge AI',
-        cohort: 'Cohort 12 (Spring 2026)',
-        designation: 'Founder & CEO',
-        isSupabase: false
-      },
-      'admin@venturebharat.in': {
-        id: 'usr_admin_01',
-        email: 'admin@venturebharat.in',
-        role: 'admin',
-        full_name: 'Col. Vikramaditya Rathore',
-        phone: '+91 99000 11223',
-        designation: 'CEO & Incubation Director',
-        organization: 'VentureBharat Incubation Foundation (AIM/DST)',
-        isSupabase: false
-      }
-    };
-
-    const target = demoAccounts[email.toLowerCase().trim()];
-    if (!target) {
-      // Allow custom email with role
-      const customUser = {
-        id: 'usr_' + Date.now(),
-        email: email.trim(),
-        role: role || 'startup',
-        full_name: email.split('@')[0],
-        phone: '+91 98765 43210',
-        startup_name: 'Indian Innovation Labs',
-        sector: 'DeepTech',
-        cohort: 'Cohort 12',
-        isSupabase: false
-      };
-      localStorage.setItem('vb_active_user', JSON.stringify(customUser));
-      return { success: true, user: customUser };
-    }
-
-    if (role && role !== target.role) {
-      throw new Error(
-        `Access restricted: This account is registered as '${target.role.toUpperCase()}', not '${role.toUpperCase()}'.`
-      );
-    }
-
-    localStorage.setItem('vb_active_user', JSON.stringify(target));
-    return { success: true, user: target };
   },
 
-  // Sign up for new startup
-  async signUpStartup({ email, password, full_name, phone, startup_name, sector, dpiit_number }) {
-    if (isSupabaseConfigured && supabase) {
+  // Strict Startup Innovator Registration (Always assigns 'startup' role)
+  async signUpStartup(params = {}) {
+    const email = params.email;
+    const password = params.password;
+    const full_name = (params.full_name || params.name || params.fullName || '').trim();
+    const phone = (params.phone || '').trim();
+    const startup_name = (params.startup_name || params.startupName || '').trim();
+    const sector = (params.sector || 'DeepTech & AI').trim();
+    const dpiit_number = (params.dpiit_number || params.dpiitNumber || '').trim();
+
+    if (!email || !email.trim() || !email.includes('@')) {
+      throw new Error('A valid official email address is required.');
+    }
+    if (!password || password.length < 6) {
+      throw new Error('Password must be at least 6 characters long.');
+    }
+    if (!full_name) {
+      throw new Error('Founder full name is required.');
+    }
+    if (!startup_name) {
+      throw new Error('Startup / venture name is required.');
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+
+    if (!isSupabaseConfigured || !supabase) {
+      throw new Error('Registration is unavailable. Configure the Supabase project URL and publishable key, then reload.');
+    }
+
+    {
       const { data, error } = await supabase.auth.signUp({
-        email,
+        email: cleanEmail,
         password,
         options: {
           data: {
-            full_name,
-            phone,
-            role: 'startup',
-            startup_name,
-            sector,
-            dpiit_number
+            full_name: full_name.trim(),
+            phone: phone?.trim(),
+            role: 'startup', // Database trigger strictly enforces 'startup'
+            startup_name: startup_name.trim(),
+            sector: sector || 'DeepTech & AI',
+            dpiit_number: dpiit_number?.trim() || null
           }
         }
       });
 
-      if (error) throw error;
+      if (error) {
+        if (
+          error.message?.toLowerCase().includes('already registered') ||
+          error.message?.toLowerCase().includes('user already exists')
+        ) {
+          throw new Error('An account with this email address already exists. Please sign in instead.');
+        }
+        throw new Error(error.message || 'Registration failed. Please check inputs.');
+      }
 
-      const newUser = {
+      // Check for duplicate account disguised by Supabase identity confirmation
+      if (data?.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
+        throw new Error('An account with this email address already exists. Please sign in instead.');
+      }
+
+      const hasActiveSession = Boolean(data?.session);
+      let profile = null;
+      if (hasActiveSession && data?.user) {
+        const { data: createdProfile, error: profileError } = await supabase
+          .from('profiles')
+          .select('id, role, is_active, full_name, phone, organization')
+          .eq('id', data.user.id)
+          .maybeSingle();
+        if (profileError || !createdProfile || createdProfile.id !== data.user.id || createdProfile.role !== 'startup' || createdProfile.is_active === false) {
+          await supabase.auth.signOut();
+          throw new Error('Your account was created, but its startup profile could not be verified. Contact support before signing in.');
+        }
+        profile = createdProfile;
+      }
+
+      const newUser = data?.user ? {
         id: data.user.id,
-        email: data.user.email,
-        role: 'startup',
-        full_name,
-        phone,
-        startup_name,
-        sector,
-        dpiit_number,
+        email: cleanEmail,
+        role: profile?.role || 'startup',
+        full_name: profile?.full_name || full_name.trim(),
+        phone: profile?.phone || phone?.trim(),
+        startup_name: startup_name.trim(),
+        sector: sector || 'DeepTech & AI',
+        dpiit_number: dpiit_number?.trim() || null,
+        organization: profile?.organization,
         isSupabase: true
+      } : null;
+
+      if (hasActiveSession && newUser) {
+        localStorage.setItem('vb_active_user', JSON.stringify(newUser));
+      }
+
+      return {
+        success: true,
+        requiresEmailConfirmation: !hasActiveSession,
+        user: newUser,
+        message: hasActiveSession
+          ? 'Registration successful! Welcome to the VentureBharat Incubation Portal.'
+          : 'Registration successful! A verification email has been sent to your address. Please verify your email before logging in.'
       };
-
-      localStorage.setItem('vb_active_user', JSON.stringify(newUser));
-      return { success: true, user: newUser, data };
     }
-
-    // Demo Mode registration
-    const newUser = {
-      id: 'usr_' + Date.now(),
-      email,
-      role: 'startup',
-      full_name,
-      phone,
-      startup_name: startup_name || 'InnovateBharat Technologies',
-      sector: sector || 'DeepTech & AI',
-      dpiit_number: dpiit_number || 'DIPP-' + Math.floor(10000 + Math.random() * 90000),
-      cohort: 'Cohort 13 (Autumn 2026)',
-      sanctioned_grant: 2500000,
-      disbursed_grant: 0,
-      isSupabase: false
-    };
-
-    localStorage.setItem('vb_active_user', JSON.stringify(newUser));
-    return { success: true, user: newUser };
   },
 
-  // Sign Out
+  // Test Role Escalation Prevention (Scenario 12)
+  async attemptRoleEscalation(targetRole = 'admin') {
+    if (isSupabaseConfigured && supabase) {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('No active session.');
+      const { error } = await supabase
+        .from('profiles')
+        .update({ role: targetRole })
+        .eq('id', session.user.id);
+      if (error) throw error;
+      return { success: true };
+    }
+    // In mock mode, database security trigger simulation denies modification
+    throw new Error('Access Denied: You do not have permission to modify account roles.');
+  },
+
+  // Sign Out cleanly
   async signOut() {
     if (isSupabaseConfigured && supabase) {
       await supabase.auth.signOut().catch(() => {});
@@ -1028,33 +1113,74 @@ export const supabaseService = {
     localStorage.removeItem('vb_active_user');
   },
 
-  // Get Current Session User
-  async getCurrentUser() {
-    if (isSupabaseConfigured && supabase) {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', session.user.id)
-          .single();
-
-        return {
-          id: session.user.id,
-          email: session.user.email,
-          role: profile?.role || session.user.user_metadata?.role || 'startup',
-          full_name: profile?.full_name || session.user.user_metadata?.full_name || session.user.email.split('@')[0],
-          phone: profile?.phone || session.user.user_metadata?.phone,
-          isSupabase: true
-        };
-      }
+  // Securely create an authorized administrator (Restricted to existing Admins)
+  async createAdminUser({ email, password, full_name, phone, designation }) {
+    // 1. Verify current session is an authorized admin
+    const currentUser = await this.getCurrentUser();
+    if (!currentUser || currentUser.role !== 'admin') {
+      throw new Error('Access Denied: Only authorized administrators can create new admin accounts.');
     }
 
-    try {
-      const stored = localStorage.getItem('vb_active_user');
-      return stored ? JSON.parse(stored) : null;
-    } catch {
-      return null;
+    if (!isSupabaseConfigured || !supabase) {
+      throw new Error('Administrator creation requires the configured Supabase project.');
+    }
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) throw new Error('Your session has expired. Please sign in again.');
+
+    {
+      const res = await fetch('/api/auth/admin/create-admin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ email, password, full_name, phone, designation })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.message || 'Failed to create administrator account.');
+      }
+      return data;
+    }
+  },
+
+  // Get Current Session User with strict profile role re-verification
+  async getCurrentUser() {
+    if (!isSupabaseConfigured || !supabase) return null;
+    {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        if (error || !session?.user) {
+          localStorage.removeItem('vb_active_user');
+          return null;
+        }
+
+        const { data: profile, error: profileErr } = await supabase
+          .from('profiles')
+          .select('id, email, full_name, role, phone, designation, organization, is_active')
+          .eq('id', session.user.id)
+          .maybeSingle();
+        if (profileErr || !profile || profile.id !== session.user.id || !['admin', 'startup'].includes(profile.role) || profile.is_active === false) {
+          await supabase.auth.signOut();
+          localStorage.removeItem('vb_active_user');
+          return null;
+        }
+
+        const activeUser = {
+          id: session.user.id,
+          email: session.user.email,
+          role: profile.role,
+          full_name: profile.full_name || session.user.email.split('@')[0],
+          phone: profile.phone,
+          designation: profile.designation,
+          organization: profile.organization,
+          isSupabase: true
+        };
+
+        localStorage.setItem('vb_active_user', JSON.stringify(activeUser));
+        return activeUser;
+      } catch (err) {
+        console.warn('Session check failed:', err);
+        localStorage.removeItem('vb_active_user');
+        return null;
+      }
     }
   },
 
@@ -1134,7 +1260,7 @@ export const supabaseService = {
       }
     }
 
-    // Demo Mode execution
+    // Local preview data only; it does not authenticate users.
     const newEntry = {
       ...formattedData,
       id: `st_${Date.now()}`,
@@ -1167,7 +1293,7 @@ export const supabaseService = {
       }
     }
 
-    // Demo Mode update
+    // Local preview data only; it does not authenticate users.
     localStartupsCache = localStartupsCache.map((s) => {
       if (s.id === id) {
         return {

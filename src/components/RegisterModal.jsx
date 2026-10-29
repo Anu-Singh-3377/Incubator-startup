@@ -18,6 +18,7 @@ export default function RegisterModal({ isOpen, onClose, onRegisterSuccess }) {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [successInfo, setSuccessInfo] = useState(null);
 
   if (!isOpen) return null;
 
@@ -58,8 +59,12 @@ export default function RegisterModal({ isOpen, onClose, onRegisterSuccess }) {
       });
 
       if (res.success) {
-        onRegisterSuccess(res.user);
-        onClose();
+        if (res.requiresEmailConfirmation) {
+          setSuccessInfo(res.message);
+        } else {
+          onRegisterSuccess(res.user, res.message);
+          onClose();
+        }
       }
     } catch (err) {
       setError(err.message || 'Registration failed. Please check inputs.');
@@ -105,7 +110,30 @@ export default function RegisterModal({ isOpen, onClose, onRegisterSuccess }) {
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-3.5 overflow-y-auto pr-1">
+        {successInfo ? (
+          <div className="py-6 text-center space-y-3">
+            <div className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-700 mx-auto flex items-center justify-center">
+              <CheckCircle className="w-6 h-6" />
+            </div>
+            <h3 className="text-base font-bold text-slate-900">
+              Application &amp; Registration Submitted!
+            </h3>
+            <p className="text-xs text-slate-600 max-w-md mx-auto leading-relaxed">
+              {successInfo}
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                setSuccessInfo(null);
+                onClose();
+              }}
+              className="mt-3 px-5 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-xl shadow-xs transition"
+            >
+              Return to Sign In
+            </button>
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-3.5 overflow-y-auto pr-1">
           {/* Role selector */}
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1.5">
@@ -305,6 +333,7 @@ export default function RegisterModal({ isOpen, onClose, onRegisterSuccess }) {
             )}
           </button>
         </form>
+        )}
       </div>
     </div>
   );

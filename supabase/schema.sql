@@ -45,6 +45,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
     avatar_url TEXT,
     designation TEXT,
     organization TEXT,
+    is_active BOOLEAN NOT NULL DEFAULT true,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
@@ -151,10 +152,10 @@ RETURNS BOOLEAN AS $$
 BEGIN
     RETURN EXISTS (
         SELECT 1 FROM public.profiles
-        WHERE id = auth.uid() AND role = 'admin'
+        WHERE id = auth.uid() AND role = 'admin' AND is_active = true
     );
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER STABLE SET search_path = '';
 
 -- Enable RLS on all tables
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
@@ -165,15 +166,42 @@ ALTER TABLE public.incubation_announcements ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.facility_bookings ENABLE ROW LEVEL SECURITY;
 
 -- Profiles Policies
-CREATE POLICY "Public profiles can be read by authenticated users"
-    ON public.profiles FOR SELECT
-    TO authenticated
-    USING (true);
+CREATE POLICY "Users can read own profile or admins can read profiles"
+    ON public.profiles FOR SELECT TO authenticated
+    USING (id = (SELECT auth.uid()) OR public.is_admin());
 
-CREATE POLICY "Users can update their own profile"
-    ON public.profiles FOR UPDATE
-    TO authenticated
-    USING (auth.uid() = id);
+CREATE POLICY "Users can update own profile details"
+    ON public.profiles FOR UPDATE TO authenticated
+    USING (id = (SELECT auth.uid()) OR public.is_admin())
+    WITH CHECK (id = (SELECT auth.uid()) OR public.is_admin());
+
+CREATE POLICY "Users can create own startup profile"
+    ON public.profiles FOR INSERT TO authenticated
+    WITH CHECK (id = (SELECT auth.uid()) AND role = 'startup');
+
+CREATE POLICY "Admins can manage profiles"
+    ON public.profiles FOR ALL TO authenticated
+    USING (public.is_admin()) WITH CHECK (public.is_admin());
+
+CREATE OR REPLACE FUNCTION public.protect_profile_authorization_fields()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF NEW.role IS DISTINCT FROM OLD.role OR NEW.is_active IS DISTINCT FROM OLD.is_active THEN
+        IF COALESCE((auth.jwt() ->> 'role') = 'service_role', false) IS NOT TRUE
+           AND COALESCE(current_setting('role', true), '') NOT IN ('postgres', 'supabase_admin')
+           AND public.is_admin() IS NOT TRUE THEN
+            RAISE EXCEPTION 'Only an authorized administrator can change account authorization.';
+        END IF;
+    END IF;
+    NEW.updated_at := timezone('utc'::text, now());
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = '';
+
+DROP TRIGGER IF EXISTS trg_enforce_profile_role_protection ON public.profiles;
+CREATE TRIGGER trg_enforce_profile_role_protection
+    BEFORE UPDATE ON public.profiles
+    FOR EACH ROW EXECUTE FUNCTION public.protect_profile_authorization_fields();
 
 -- Startups Policies
 CREATE POLICY "Startups can view their own record"
@@ -249,19 +277,34 @@ CREATE POLICY "Startups can view and create their own bookings"
 -- 10. AUTOMATED USER REGISTRATION TRIGGER
 -- Automatically handles new Supabase Auth signups and creates profile & startup row
 -- ==============================================================================
+CREATE OR REPLACE FUNCTION public.normalize_auth_email_change()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.email_change := COALESCE(NEW.email_change, '');
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = '';
+
+DROP TRIGGER IF EXISTS normalize_auth_email_change ON auth.users;
+CREATE TRIGGER normalize_auth_email_change
+    BEFORE INSERT OR UPDATE OF email_change ON auth.users
+    FOR EACH ROW EXECUTE FUNCTION public.normalize_auth_email_change();
+
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
 DECLARE
-    assigned_role user_role;
+    assigned_role public.user_role;
     user_fullname TEXT;
     user_startup_name TEXT;
     user_sector TEXT;
     user_phone TEXT;
+    user_dpiit_number TEXT;
 BEGIN
-    -- Extract role from metadata, default to 'startup'
-    assigned_role := COALESCE((new.raw_user_meta_data->>'role')::user_role, 'startup'::user_role);
+    -- Never trust user-editable metadata to assign a privileged role.
+    assigned_role := 'startup'::public.user_role;
     user_fullname := COALESCE(new.raw_user_meta_data->>'full_name', split_part(new.email, '@', 1));
     user_phone := new.raw_user_meta_data->>'phone';
+    user_dpiit_number := NULLIF(new.raw_user_meta_data->>'dpiit_number', '');
     user_startup_name := COALESCE(new.raw_user_meta_data->>'startup_name', 'Innovative Labs Bharat');
     user_sector := COALESCE(new.raw_user_meta_data->>'sector', 'DeepTech & AI');
 
@@ -275,7 +318,7 @@ BEGIN
         user_phone,
         CASE WHEN assigned_role = 'admin' THEN 'Incubation Director' ELSE 'Founder & CEO' END,
         CASE WHEN assigned_role = 'admin' THEN 'VentureBharat Incubation Centre' ELSE user_startup_name END
-    );
+    ) ON CONFLICT (id) DO NOTHING;
 
     -- If startup, create initial startup directory entry
     IF assigned_role = 'startup' THEN
@@ -288,6 +331,7 @@ BEGIN
             founder_name,
             founder_email,
             founder_phone,
+            dpiit_number,
             sanctioned_grant,
             disbursed_grant,
             grant_scheme
@@ -300,15 +344,16 @@ BEGIN
             user_fullname,
             new.email,
             user_phone,
+            user_dpiit_number,
             2500000.00,
             1250000.00,
             'Startup India Seed Fund Scheme (SISFS)'
-        );
+        ) ON CONFLICT (profile_id) DO NOTHING;
     END IF;
 
     RETURN new;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = '';
 
 -- Drop trigger if exists and recreate
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;

@@ -35,7 +35,7 @@ incubation/
     ├── index.css                       # Global styles, glassmorphism & gradients
     │
     ├── lib/                            # Database & client services
-    │   └── supabaseClient.js           # Supabase client & zero-config Demo Mode fallback
+    │   └── supabaseClient.js           # Supabase Auth client and role verification
     │
     ├── services/                       # API clients
     │   └── api.js                      # Auth API client
@@ -79,12 +79,12 @@ All configuration lives in the single **`.env`** file at root:
 # 🇮🇳 VENTUREBHARAT INCUBATION CENTER - ENVIRONMENT CONFIGURATION
 # ==============================================================================
 
-# Supabase Project Credentials (from your Supabase Dashboard: Settings -> API)
+# Supabase browser credentials (publishable/anon key only)
 VITE_SUPABASE_URL=https://your-project-id.supabase.co
-VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.your-anon-public-key-here
+VITE_SUPABASE_ANON_KEY=your-publishable-or-anon-key
 
 # Optional: Supabase Service Role Key (Server-side administration only)
-SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.your-service-role-key-here
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 
 # Backend Server Configuration
 PORT=5000
@@ -92,7 +92,7 @@ NODE_ENV=development
 JWT_SECRET=venturebharat_incubation_super_secret_jwt_key_2026
 ```
 
-> ⚡ **Zero-Friction Demo Mode**: If you leave the placeholder values as they are, the application automatically launches in **Supabase Demo Mode** with realistic pre-seeded data, letting you test immediately without any errors!
+The app requires Supabase Auth for account creation and login. It does not authenticate using browser-stored demo credentials. The service-role key is only read by the Express server for administrator provisioning and must never be prefixed with `VITE_`.
 
 ---
 
@@ -112,7 +112,7 @@ JWT_SECRET=venturebharat_incubation_super_secret_jwt_key_2026
 ### Step 2: Run the Database Schema in Supabase SQL Editor
 1. In your Supabase project dashboard, click on **SQL Editor** in the left sidebar.
 2. Click **"New Query"**.
-3. Open the file **`supabase/schema.sql`** located in this repository, copy its entire contents, paste it into the editor, and click **"Run"**.
+3. For a new project, run `supabase/schema.sql`, then `supabase/migration_secure_auth_roles.sql`. For an existing project with this schema, run the migration only.
 
 #### What this script automatically creates:
 - **`public.profiles`**: Stores user profiles linked to Supabase Auth (`auth.users`) with roles `startup` and `admin`.
@@ -126,24 +126,40 @@ JWT_SECRET=venturebharat_incubation_super_secret_jwt_key_2026
 
 ---
 
-### Step 3: Copy Your Supabase API Keys
+### Step 3: Configure credentials and bootstrap the first administrator
 1. In your Supabase Dashboard, click **Project Settings** (gear icon) ➔ **API**.
 2. Copy:
    - **Project URL** (e.g. `https://xyzabcdefghijkl.supabase.co`)
-   - **Project API Key (`anon` / `public`)**
+   - **Publishable key** (or legacy `anon` key)
 3. Open the single **`.env`** file at the root of this project, and paste your values.
-4. Save the file and restart your dev server (`npm run dev`). The top navbar badge will change from **"Demo Mode"** to **"Supabase Live"**!
+4. Add the Project URL and publishable key to `.env` as `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`.
+5. Set `SUPABASE_SERVICE_ROLE_KEY` in the server `.env` for the protected administrator provisioning endpoint. Never use this key in client code or commit it.
+6. Create the first administrator identity in Supabase Authentication (email/password; confirm the email in the dashboard if needed). Then run this one-time trusted SQL Editor command, replacing the email:
+
+```sql
+SELECT public.assign_admin_role('admin@example.com');
+```
+
+The signup trigger initially assigns every new identity the `startup` role. Only the trusted SQL Editor, an already-authorized administrator, or the server service role can promote an account.
+
+The migration also repairs `auth.users.email_change` rows that are `NULL` and normalizes future null values to an empty string, as expected by Supabase Auth.
+
+7. Restart the server and client with `npm run dev`.
 
 ---
 
-## 🔑 Pre-Seeded Accounts for Testing
+## Authentication test checklist
 
-| Role Gateway | Email | Password | Phone (for OTP) | Portal Access |
-| :--- | :--- | :--- | :--- | :--- |
-| **🚀 Startup Innovator** | `founder@venturebharat.in` | `Startup@2026` | `+91 98765 43210` | KisanSetu DeepTech Labs (Cohort 12) |
-| **🛡️ Incubation Admin** | `admin@venturebharat.in` | `Admin@2026` | `+91 99000 11223` | Col. Vikramaditya Rathore (CEO & Director) |
-
-> 💡 **Demo OTP Code:** Enter `123456` or click the "Fill Demo OTP" button when in OTP login mode.
+- Register a startup account with the existing registration form; check that it creates one Auth identity, one `startup` profile, and at most one linked startup row.
+- Try registering the same email again; expect a duplicate-account error.
+- With email confirmation enabled, confirm registration asks the user to verify email and that an unverified password login is denied by Supabase.
+- Sign in with a valid startup account and the Startup portal; expect the Startup Dashboard.
+- Sign in with an incorrect password; expect an inline error and no dashboard navigation.
+- Sign in as a startup user through the Admin portal; expect access denied and no Admin Dashboard.
+- Sign in as an authorized admin through the Admin portal; expect the Admin Dashboard.
+- Try a startup profile update that changes `role` or `is_active`; expect the database trigger to reject it.
+- Sign out, then open `#/admin` or `#/startup`; expect redirect to login.
+- While signed in, manually open the other dashboard hash; expect redirect to the role's dashboard. Direct table/API access remains subject to RLS.
 
 ---
 

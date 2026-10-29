@@ -352,3 +352,125 @@ export const getDemoCredentials = async (req, res) => {
   });
 };
 
+/**
+ * Secure Server-Side Administrator Creation (Admin Auth API)
+ * Restricts creation of admin records, hashes passwords with bcrypt/Supabase Auth,
+ * handles rollback on partial failures, and never exposes service_role key to the frontend.
+ */
+export const createAdminUser = async (req, res) => {
+  try {
+    const accessToken = req.headers.authorization?.startsWith('Bearer ')
+      ? req.headers.authorization.slice(7)
+      : null;
+    const supabaseUrl = process.env.VITE_SUPABASE_URL;
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!accessToken || !supabaseUrl || !serviceRoleKey || serviceRoleKey.includes('your-service-role-key')) {
+      return res.status(503).json({ success: false, message: 'Secure administrator provisioning is not configured.' });
+    }
+
+    const { createClient } = await import('@supabase/supabase-js');
+    const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
+      auth: { autoRefreshToken: false, persistSession: false }
+    });
+    const { data: requestingAuthData, error: tokenError } = await supabaseAdmin.auth.getUser(accessToken);
+    if (tokenError || !requestingAuthData?.user) {
+      return res.status(401).json({ success: false, message: 'A valid signed-in administrator session is required.' });
+    }
+    const { data: requestingAdmin, error: roleError } = await supabaseAdmin
+      .from('profiles')
+      .select('role, is_active')
+      .eq('id', requestingAuthData.user.id)
+      .maybeSingle();
+    if (roleError || requestingAdmin?.role !== 'admin' || requestingAdmin.is_active === false) {
+      return res.status(403).json({ success: false, message: 'Only an authorized administrator can create admin accounts.' });
+    }
+
+    const { email, password, full_name, phone, designation } = req.body;
+
+    if (typeof email !== 'string' || !email.trim() || !/^\S+@\S+\.\S+$/.test(email.trim()) || typeof password !== 'string' || !password || typeof full_name !== 'string' || !full_name.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email, password, and full name are required to create an administrator.'
+      });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({
+        success: false,
+        message: 'Password must be at least 6 characters long.'
+      });
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+    // Create the user through Supabase Auth Admin API. The signup trigger always
+    // assigns startup; the trusted server then promotes this new identity below.
+      const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+        email: cleanEmail,
+        password: password,
+        email_confirm: true,
+        user_metadata: {
+          full_name: full_name.trim(),
+          phone: phone?.trim()
+        }
+      });
+
+      if (authError) {
+        return res.status(400).json({
+          success: false,
+          message: authError.message || 'Failed to create admin in Supabase Auth.'
+        });
+      }
+
+      const authUserId = authData.user.id;
+
+      // 2. Insert into public.profiles with role = 'admin'
+      const { error: profileError } = await supabaseAdmin
+        .from('profiles')
+        .upsert({
+          id: authUserId,
+          email: cleanEmail,
+          full_name: full_name.trim(),
+          role: 'admin',
+          phone: phone?.trim() || null,
+          designation: designation?.trim() || 'Incubation Director & Program Officer',
+          organization: 'VentureBharat Incubation Foundation (AIM/DST)',
+          is_active: true,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'id' });
+
+      if (profileError) {
+        // Rollback Auth user on profile creation failure to maintain consistency
+        await supabaseAdmin.auth.admin.deleteUser(authUserId).catch(() => {});
+        return res.status(500).json({
+          success: false,
+          message: 'Failed to create admin profile record. Operation rolled back.'
+        });
+      }
+
+      // The signup trigger creates a startup row for every public Auth insert.
+      // Admin identities must not be represented in the startup portfolio.
+      const { error: startupCleanupError } = await supabaseAdmin.from('startups').delete().eq('profile_id', authUserId);
+      if (startupCleanupError) {
+        await supabaseAdmin.auth.admin.deleteUser(authUserId).catch(() => {});
+        return res.status(500).json({ success: false, message: 'Failed to finalize administrator provisioning. Operation rolled back.' });
+      }
+
+      return res.status(201).json({
+        success: true,
+        message: 'Admin account created successfully.',
+        user: {
+          id: authUserId,
+          email: cleanEmail,
+          full_name: full_name.trim(),
+          role: 'admin'
+        }
+      });
+  } catch (err) {
+    console.error('[Create Admin Error]:', err);
+    return res.status(500).json({
+      success: false,
+      message: err.message || 'Server error while creating admin.'
+    });
+  }
+};
+

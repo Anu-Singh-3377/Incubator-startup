@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import RoleSelector from './components/RoleSelector';
@@ -10,13 +10,16 @@ import StartupDashboard from './components/StartupDashboard';
 import AdminDashboard from './components/AdminDashboard';
 import { supabaseService } from './lib/supabaseClient';
 import { authApi } from './services/api';
-import { ShieldCheck, CheckCircle2 } from 'lucide-react';
+import { ShieldCheck, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState(null);
+  const currentUserRef = useRef(null);
+  currentUserRef.current = currentUser;
+  const [authChecking, setAuthChecking] = useState(true);
   const [activeRole, setActiveRole] = useState('admin'); // 'admin' | 'startup'
 
-  // Credentials (empty by default - no hardcoded demo credentials displayed)
+  // Credentials (empty by default - no hardcoded demo credentials)
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
@@ -32,24 +35,106 @@ export default function App() {
   // Platform stats
   const [stats, setStats] = useState(null);
 
-  // Hydrate session on initial mount
+  // Check URL route hash and enforce role protection
+  const syncRouteWithRole = (user) => {
+    const hash = window.location.hash || '';
+    if (!user) {
+      if (hash.includes('admin') || hash.includes('startup')) {
+        window.location.hash = '#/login';
+        setError('Please sign in to access the incubation portal.');
+      }
+      return;
+    }
+
+    if (user.role === 'admin') {
+      if (!hash.includes('admin')) {
+        window.location.hash = '#/admin';
+      }
+    } else if (user.role === 'startup') {
+      if (hash.includes('admin')) {
+        // Startup user attempted to access admin route!
+        window.location.hash = '#/startup';
+        setError('This account is not authorized for the Admin Portal.');
+      } else if (!hash.includes('startup')) {
+        window.location.hash = '#/startup';
+      }
+    }
+  };
+
+  // Hydrate session on initial mount with strict role re-validation
   useEffect(() => {
-    supabaseService.getCurrentUser().then((u) => {
-      if (u) setCurrentUser(u);
+    let isMounted = true;
+
+    const initAuth = async () => {
+      try {
+        setAuthChecking(true);
+        const user = await supabaseService.getCurrentUser();
+        if (isMounted) {
+          if (user && (user.role === 'admin' || user.role === 'startup')) {
+            setCurrentUser(user);
+            syncRouteWithRole(user);
+          } else {
+            setCurrentUser(null);
+            syncRouteWithRole(null);
+          }
+        }
+      } catch (err) {
+        console.warn('Session hydration warning:', err);
+        if (isMounted) {
+          setCurrentUser(null);
+          syncRouteWithRole(null);
+        }
+      } finally {
+        if (isMounted) {
+          setAuthChecking(false);
+        }
+      }
+    };
+
+    initAuth();
+
+    // Listen to real-time auth changes from Supabase
+    const unsubscribe = supabaseService.onAuthStateChange(async (event, session) => {
+      if (!isMounted) return;
+      if (event === 'SIGNED_OUT' || !session) {
+        setCurrentUser(null);
+        syncRouteWithRole(null);
+      } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+        const user = await supabaseService.getCurrentUser();
+        if (isMounted) {
+          setCurrentUser(user);
+          syncRouteWithRole(user);
+        }
+      }
     });
 
+    // Listen to manual URL hash navigation attempts
+    const handleHashChange = () => {
+      syncRouteWithRole(currentUserRef.current);
+    };
+    window.addEventListener('hashchange', handleHashChange);
+
+    // Fetch public platform stats
     authApi.getStats()
       .then((res) => {
-        if (res?.stats) setStats(res.stats);
+        if (res?.stats && isMounted) setStats(res.stats);
       })
       .catch(() => {
-        setStats({
-          totalStartupsIncubated: 248,
-          totalGrantsDisbursed: '₹34.8 Cr',
-          mentorsNetwork: 120,
-          patentsFiled: 87
-        });
+        if (isMounted) {
+          setStats({
+            totalStartupsIncubated: 248,
+            totalGrantsDisbursed: '₹34.8 Cr',
+            mentorsNetwork: 120,
+            patentsFiled: 87
+          });
+        }
       });
+
+    return () => {
+      isMounted = false;
+      if (unsubscribe) unsubscribe();
+      window.removeEventListener('hashchange', handleHashChange);
+    };
   }, []);
 
   // Role toggle: clears error messages without setting demo credentials
@@ -59,17 +144,20 @@ export default function App() {
     setSuccessMsg('');
   };
 
-  // Supabase / Password Login
+  // Supabase / Password Login with strict verification
   const handlePasswordLogin = async ({ email, password, role }) => {
     try {
       setLoading(true);
       setError('');
+      setSuccessMsg('');
+
       const res = await supabaseService.signIn({ email, password, role });
-      if (res.success) {
+      if (res.success && res.user) {
         setCurrentUser(res.user);
+        syncRouteWithRole(res.user);
       }
     } catch (err) {
-      setError(err.message || 'Login failed. Please check your credentials.');
+      setError(err.message || 'Invalid email or password.');
     } finally {
       setLoading(false);
     }
@@ -80,7 +168,35 @@ export default function App() {
     await supabaseService.signOut();
     authApi.logout();
     setCurrentUser(null);
+    window.location.hash = '#/login';
+    setEmail('');
+    setPassword('');
+    setError('');
+    setSuccessMsg('You have been securely signed out of the portal.');
   };
+
+  // ================= LOADING STATE: PREVENT FLASH OF PROTECTED CONTENT =================
+  if (authChecking) {
+    return (
+      <div className="h-screen w-screen bg-[#FDFBF7] flex flex-col font-sans selection:bg-emerald-600 selection:text-white">
+        <div className="w-full h-[3px] bg-gradient-to-r from-orange-500 via-amber-400 to-emerald-600 shrink-0" />
+        <div className="flex-1 flex flex-col items-center justify-center p-6 text-center space-y-4">
+          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-600 to-teal-700 flex items-center justify-center font-black text-white shadow-md text-base">
+            VB
+          </div>
+          <div>
+            <h2 className="text-base font-bold text-slate-900 tracking-tight">
+              VentureBharat Incubation Portal
+            </h2>
+            <p className="text-xs text-slate-500 mt-1 flex items-center justify-center space-x-1.5">
+              <Loader2 className="w-3.5 h-3.5 text-emerald-600 animate-spin" />
+              <span>Verifying secure portal authorization &amp; credentials...</span>
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // ================= RENDER ROLE DASHBOARDS IF LOGGED IN =================
   if (currentUser) {
@@ -93,13 +209,17 @@ export default function App() {
       );
     }
 
-    // Default to Startup Dashboard
-    return (
-      <StartupDashboard
-        user={currentUser}
-        onLogout={handleLogout}
-      />
-    );
+    if (currentUser.role === 'startup') {
+      return (
+        <StartupDashboard
+          user={currentUser}
+          onLogout={handleLogout}
+        />
+      );
+    }
+
+    // Corrupted or unrecognized role -> Deny access
+    handleLogout();
   }
 
   // ================= RENDER DUAL GATEWAY LOGIN PAGE =================
@@ -196,8 +316,13 @@ export default function App() {
       <RegisterModal
         isOpen={isRegisterOpen}
         onClose={() => setIsRegisterOpen(false)}
-        onRegisterSuccess={(newUser) => {
-          setCurrentUser(newUser);
+        onRegisterSuccess={(newUser, message) => {
+          if (newUser) {
+            setCurrentUser(newUser);
+            syncRouteWithRole(newUser);
+          } else {
+            setSuccessMsg(message || 'Registration submitted! Please verify your email or sign in with your credentials.');
+          }
         }}
       />
 
