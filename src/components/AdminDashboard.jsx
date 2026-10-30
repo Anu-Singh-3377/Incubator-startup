@@ -37,7 +37,15 @@ import {
   LifeBuoy,
   Send,
   MessageSquare,
-  HelpCircle
+  HelpCircle,
+  BarChart3,
+  PieChart,
+  Activity,
+  IndianRupee,
+  Workflow,
+  Inbox,
+  UserCheck,
+  ClipboardList
 } from 'lucide-react';
 import { supabaseService } from '../lib/supabaseClient';
 import InvestorDirectory from './InvestorDirectory';
@@ -46,6 +54,22 @@ import VendorDirectory from './VendorDirectory';
 import CommunicationHub from './CommunicationHub';
 import GuidanceCenter from './GuidanceCenter';
 import SupportDesk from './SupportDesk';
+import MonthlyProgress, { monthKey, monthLabel } from './MonthlyProgress';
+import ProgressMonitoring from './ProgressMonitoring';
+import {
+  ChartCard,
+  DonutChart,
+  HBarChart,
+  BulletList,
+  PipelineChart,
+  AreaChart,
+  ProgressRing,
+  WorkflowDiagram,
+  ORDINAL_EMERALD,
+  ORDINAL_EMERALD_3,
+  MUTED_MARK,
+  formatINR
+} from './charts/Charts';
 
 // ================= REUSABLE PAGINATION BAR COMPONENT =================
 function PaginationBar({
@@ -70,7 +94,7 @@ function PaginationBar({
         </span>
         {pageSizeOptions && pageSizeOptions.length > 0 && (
           <div className="flex items-center gap-1.5 ml-1 sm:ml-3">
-            <span className="text-[11px] text-slate-400">Rows per page:</span>
+            <span className="text-[12px] text-slate-500">Rows per page:</span>
             <select
               value={pageSize}
               onChange={(e) => {
@@ -191,18 +215,40 @@ export default function AdminDashboard({ user, onLogout }) {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
 
+  // Live Founder Inquiries & Queue State
+  const [supportTickets, setSupportTickets] = useState([]);
+  const [callbackRequests, setCallbackRequests] = useState([]);
+  const [mentorBookings, setMentorBookings] = useState([]);
+  const [inquiryTab, setInquiryTab] = useState('all'); // 'all' | 'tickets' | 'callbacks' | 'mentors'
+
+  // Admin-recorded monthly work log
+  const [monthlyReports, setMonthlyReports] = useState([]);
+
+  // Founder-submitted milestone activities (only the count is needed here; the page loads its own data)
+  const [taskSubmissions, setTaskSubmissions] = useState([]);
+
   // Load Data
   const loadData = async () => {
     setLoading(true);
     try {
-      const [startupsData, appsData, ancData] = await Promise.all([
+      const [startupsData, appsData, ancData, ticketsData, callbacksData, bookingsData, reportsData] = await Promise.all([
         supabaseService.getStartups(),
         supabaseService.getApplications(),
-        supabaseService.getAnnouncements()
+        supabaseService.getAnnouncements(),
+        supabaseService.getSupportTickets(),
+        supabaseService.getCallbackRequests(),
+        supabaseService.getMentorBookings(),
+        supabaseService.getMonthlyReports()
       ]);
+      // Separate so a missing progress migration never blocks the rest of the dashboard
+      supabaseService.getTaskSubmissions().then(setTaskSubmissions).catch(() => setTaskSubmissions([]));
       setStartups(startupsData || []);
       setApplications(appsData || []);
       setAnnouncements(ancData || []);
+      setSupportTickets(ticketsData || []);
+      setCallbackRequests(callbacksData || []);
+      setMentorBookings(bookingsData || []);
+      setMonthlyReports(reportsData || []);
     } catch (err) {
       console.error('Failed to load incubator data:', err);
     } finally {
@@ -214,7 +260,69 @@ export default function AdminDashboard({ user, onLogout }) {
     loadData();
   }, []);
 
+  // Refresh only what the monthly log touches (reports + milestone progress), without the page loader
+  const refreshMonthly = async () => {
+    const [reportsData, startupsData] = await Promise.all([
+      supabaseService.getMonthlyReports(),
+      supabaseService.getStartups()
+    ]);
+    setMonthlyReports(reportsData || []);
+    setStartups(startupsData || []);
+  };
+
+  // Live count of activities awaiting review
+  useEffect(() => {
+    const refresh = () => supabaseService.getTaskSubmissions().then(setTaskSubmissions).catch(() => {});
+    return supabaseService.subscribeToTaskSubmissions(refresh);
+  }, []);
+
+  // Keep support counts current while the admin is on another page
+  useEffect(() => {
+    const timer = setInterval(async () => {
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
+      try {
+        const [ticketsData, callbacksData] = await Promise.all([
+          supabaseService.getSupportTickets(),
+          supabaseService.getCallbackRequests()
+        ]);
+        setSupportTickets(ticketsData || []);
+        setCallbackRequests(callbacksData || []);
+      } catch {
+        /* next tick retries */
+      }
+    }, 30000);
+    return () => clearInterval(timer);
+  }, []);
+
   // Format Current Date
+  // Quick Status Handlers for Inquiries Queue
+  const handleQuickUpdateTicket = async (ticketId, newStatus) => {
+    try {
+      await supabaseService.updateTicketStatus(ticketId, newStatus);
+      await loadData();
+    } catch (err) {
+      alert('Error updating ticket: ' + err.message);
+    }
+  };
+
+  const handleQuickUpdateCallback = async (cbId, newStatus) => {
+    try {
+      await supabaseService.updateCallbackStatus(cbId, newStatus);
+      await loadData();
+    } catch (err) {
+      alert('Error updating callback: ' + err.message);
+    }
+  };
+
+  const handleQuickUpdateBooking = async (bookingId, newStatus) => {
+    try {
+      await supabaseService.updateMentorBookingStatus(bookingId, newStatus, 'Status updated via Overview Action Center');
+      await loadData();
+    } catch (err) {
+      alert('Error updating mentor booking: ' + err.message);
+    }
+  };
+
   const currentDateFormatted = new Date().toLocaleDateString('en-IN', {
     weekday: 'long',
     year: 'numeric',
@@ -227,6 +335,96 @@ export default function AdminDashboard({ user, onLogout }) {
   const activeCount = startups.filter((s) => s.status === 'Active' || s.stage !== 'Graduated').length;
   const alumniCount = startups.filter((s) => s.status === 'Alumni' || s.stage === 'Graduated').length;
   const pendingAppsCount = applications.filter((a) => a.status === 'Under Review' || a.status === 'Interview Scheduled').length;
+  const pendingTicketsCount = supportTickets.filter((t) => t.status === 'Open' || t.status === 'In Progress').length;
+  const pendingCallbacksCount = callbackRequests.filter((c) => c.status === 'Requested').length;
+  const pendingBookingsCount = mentorBookings.filter((b) => b.status === 'Requested').length;
+  const totalActionItems = pendingAppsCount + pendingTicketsCount + pendingCallbacksCount + pendingBookingsCount;
+
+  // Completed requests leave the admin's live queues
+  const activeSupportTickets = supportTickets.filter((t) => t.status !== 'Resolved' && t.status !== 'Closed');
+  const activeCallbackRequests = callbackRequests.filter((c) => c.status !== 'Completed');
+
+  // Monthly work log coverage for the current month
+  const currentMonth = monthKey();
+  const currentMonthReports = monthlyReports.filter((r) => String(r.report_month).slice(0, 7) === currentMonth.slice(0, 7));
+  const loggedThisMonth = startups.filter((s) => currentMonthReports.some((r) => r.startup_id === s.id)).length;
+  const pendingMonthlyLogs = Math.max(startups.length - loggedThisMonth, 0);
+  const pendingActivityReviews = taskSubmissions.filter((t) => t.status === 'Submitted for Review').length;
+  const monthlyStatusCounts = ['On Track', 'Needs Attention', 'At Risk'].map(
+    (st) => currentMonthReports.filter((r) => r.status === st && startups.some((s) => s.id === r.startup_id)).length
+  );
+
+  // ================= OVERVIEW CHART DATA (derived, read-only) =================
+  const stageOf = (s) => s.stage || (s.status === 'Alumni' ? 'Graduated' : 'Incubated');
+  const stageChartData = ['Incubated', 'Accelerated', 'Graduated'].map((stage, i) => ({
+    label: stage,
+    value: startups.filter((s) => stageOf(s) === stage).length,
+    color: ORDINAL_EMERALD_3[i]
+  }));
+
+  const pipelineStages = [
+    { label: 'Under Review', color: ORDINAL_EMERALD[0] },
+    { label: 'Interview Scheduled', color: ORDINAL_EMERALD[1] },
+    { label: 'Accepted', color: ORDINAL_EMERALD[3] },
+    { label: 'Rejected', color: MUTED_MARK }
+  ].map((st) => ({ ...st, value: applications.filter((a) => a.status === st.label).length }));
+  const acceptedAppsCount = pipelineStages.find((s) => s.label === 'Accepted').value;
+
+  const sectorCounts = startups.reduce((acc, s) => {
+    const key = (s.sector || 'Other').split('&')[0].trim();
+    acc[key] = (acc[key] || 0) + 1;
+    return acc;
+  }, {});
+  const sectorChartData = Object.entries(sectorCounts)
+    .map(([label, value]) => ({ label, value, tooltip: `${value} startup${value === 1 ? '' : 's'}` }))
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 6);
+
+  const totalSanctioned = startups.reduce((sum, s) => sum + (Number(s.sanctioned_grant) || 0), 0);
+  const totalDisbursed = startups.reduce((sum, s) => sum + (Number(s.disbursed_grant) || 0), 0);
+  const grantChartData = [...startups]
+    .sort((a, b) => (Number(b.sanctioned_grant) || 0) - (Number(a.sanctioned_grant) || 0))
+    .slice(0, 5)
+    .map((s) => ({
+      label: s.startup_name,
+      value: Number(s.disbursed_grant) || 0,
+      target: Number(s.sanctioned_grant) || 0
+    }));
+
+  const allDocs = startups.flatMap((s) => s.documents || []);
+  const verifiedDocs = allDocs.filter((d) => d.status === 'Verified').length;
+  const reviewDocs = allDocs.filter((d) => d.status === 'Under Review').length;
+  const otherDocs = allDocs.length - verifiedDocs - reviewDocs;
+  const compliancePct = allDocs.length ? (verifiedDocs / allDocs.length) * 100 : 0;
+  const incorporatedPct = totalCount
+    ? Math.round((startups.filter((s) => (s.incorporation_status || '').includes('Incorporated')).length / totalCount) * 100)
+    : 0;
+  const dpiitPct = totalCount
+    ? Math.round((startups.filter((s) => s.dpiit_number && !s.dpiit_number.includes('Pending')).length / totalCount) * 100)
+    : 0;
+
+  const growthChartData = (() => {
+    const dates = startups.map((s) => new Date(s.created_at)).filter((d) => !isNaN(d));
+    if (dates.length === 0) return [];
+    const start = new Date(Math.min(...dates));
+    const cursor = new Date(start.getFullYear(), start.getMonth(), 1);
+    const now = new Date();
+    const points = [];
+    while (cursor <= now && points.length < 36) {
+      const monthEnd = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1);
+      const joined = startups.filter((s) => {
+        const d = new Date(s.created_at);
+        return d >= cursor && d < monthEnd;
+      });
+      points.push({
+        label: cursor.toLocaleDateString('en-IN', { month: 'short', year: '2-digit' }),
+        value: dates.filter((d) => d < monthEnd).length,
+        note: joined.length ? `Joined: ${joined.map((s) => s.startup_name).join(', ')}` : undefined
+      });
+      cursor.setMonth(cursor.getMonth() + 1);
+    }
+    return points;
+  })();
 
   // Validation function
   const validateForm = () => {
@@ -564,7 +762,7 @@ export default function AdminDashboard({ user, onLogout }) {
           <div>
             <h1 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight flex items-center gap-2">
               <span>Incubator Dashboard</span>
-              <span className="hidden sm:inline-flex px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+              <span className="hidden sm:inline-flex px-2 py-0.5 rounded text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
                 Portfolio Management
               </span>
             </h1>
@@ -590,8 +788,10 @@ export default function AdminDashboard({ user, onLogout }) {
               title="Notifications"
             >
               <Bell className="w-4 h-4" />
-              {pendingAppsCount > 0 && (
-                <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-amber-500" />
+              {totalActionItems > 0 && (
+                <span className="absolute -top-1 -right-1 px-1.5 py-0.2 rounded-full bg-rose-600 text-white text-[10px] font-black shadow-xs animate-pulse">
+                  {totalActionItems}
+                </span>
               )}
             </button>
 
@@ -599,21 +799,76 @@ export default function AdminDashboard({ user, onLogout }) {
               <div className="absolute right-0 mt-2 w-80 bg-white border border-slate-200 rounded-xl shadow-lg p-4 z-40 text-xs">
                 <div className="flex items-center justify-between pb-2 border-b border-slate-100 mb-2">
                   <span className="font-bold text-slate-900">Notifications</span>
-                  <span className="text-[10px] text-slate-500 font-semibold">{pendingAppsCount} pending</span>
+                  <span className="text-[11px] text-slate-500 font-semibold">{totalActionItems} action items</span>
                 </div>
-                <div className="space-y-2 max-h-60 overflow-y-auto">
-                  {pendingAppsCount > 0 ? (
-                    <div className="p-2.5 bg-amber-50/70 border border-amber-200 rounded-lg text-amber-900">
-                      <p className="font-semibold text-xs">{pendingAppsCount} applications pending screening</p>
-                      <p className="text-[11px] text-amber-700 mt-0.5">Cohort admissions evaluation in progress.</p>
-                    </div>
-                  ) : (
-                    <p className="text-slate-500 py-2 text-center">No unread notifications.</p>
+                <div className="space-y-2 max-h-72 overflow-y-auto">
+                  {pendingTicketsCount > 0 && (
+                    <button
+                      onClick={() => { setActiveNav('support'); setNotificationsOpen(false); }}
+                      className="w-full text-left p-2.5 bg-rose-50/80 hover:bg-rose-100/80 border border-rose-200 rounded-lg text-rose-950 transition"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-xs flex items-center gap-1.5">
+                          <LifeBuoy className="w-3.5 h-3.5 text-rose-700" />
+                          {pendingTicketsCount} Support Complaint{pendingTicketsCount === 1 ? '' : 's'}
+                        </span>
+                        <span className="text-[10px] font-black uppercase text-rose-700 bg-rose-100 px-1.5 py-0.5 rounded">Action</span>
+                      </div>
+                      <p className="text-[11px] text-rose-800 mt-1">Founders awaiting resolution on grant/compliance issues.</p>
+                    </button>
+                  )}
+                  {pendingCallbacksCount > 0 && (
+                    <button
+                      onClick={() => { setActiveNav('support'); setNotificationsOpen(false); }}
+                      className="w-full text-left p-2.5 bg-amber-50/80 hover:bg-amber-100/80 border border-amber-200 rounded-lg text-amber-950 transition"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-xs flex items-center gap-1.5">
+                          <Phone className="w-3.5 h-3.5 text-amber-700" />
+                          {pendingCallbacksCount} Callback Request{pendingCallbacksCount === 1 ? '' : 's'}
+                        </span>
+                        <span className="text-[10px] font-black uppercase text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded">Pending</span>
+                      </div>
+                      <p className="text-[11px] text-amber-800 mt-1">Founders requested scheduled telephone consultations.</p>
+                    </button>
+                  )}
+                  {pendingBookingsCount > 0 && (
+                    <button
+                      onClick={() => { setActiveNav('mentors'); setNotificationsOpen(false); }}
+                      className="w-full text-left p-2.5 bg-blue-50/80 hover:bg-blue-100/80 border border-blue-200 rounded-lg text-blue-950 transition"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-xs flex items-center gap-1.5">
+                          <Users className="w-3.5 h-3.5 text-blue-700" />
+                          {pendingBookingsCount} Mentor Session Request{pendingBookingsCount === 1 ? '' : 's'}
+                        </span>
+                        <span className="text-[10px] font-black uppercase text-blue-700 bg-blue-100 px-1.5 py-0.5 rounded">New</span>
+                      </div>
+                      <p className="text-[11px] text-blue-800 mt-1">Advisory 1:1 sessions awaiting confirmation & meeting link.</p>
+                    </button>
+                  )}
+                  {pendingAppsCount > 0 && (
+                    <button
+                      onClick={() => { setActiveNav('applications'); setNotificationsOpen(false); }}
+                      className="w-full text-left p-2.5 bg-emerald-50/80 hover:bg-emerald-100/80 border border-emerald-200 rounded-lg text-emerald-950 transition"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-xs flex items-center gap-1.5">
+                          <FileText className="w-3.5 h-3.5 text-emerald-700" />
+                          {pendingAppsCount} Cohort Application{pendingAppsCount === 1 ? '' : 's'}
+                        </span>
+                        <span className="text-[10px] font-black uppercase text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded">Review</span>
+                      </div>
+                      <p className="text-[11px] text-emerald-800 mt-1">Screening and scoring panel evaluation pending.</p>
+                    </button>
+                  )}
+                  {totalActionItems === 0 && (
+                    <p className="text-slate-500 py-3 text-center">No pending action items. All caught up!</p>
                   )}
                   {announcements.slice(0, 2).map((a) => (
                     <div key={a.id} className="p-2 bg-slate-50 rounded-lg border border-slate-100">
-                      <p className="font-bold text-slate-800 text-[11px]">{a.title}</p>
-                      <p className="text-[10px] text-slate-500 mt-0.5 truncate">{a.content}</p>
+                      <p className="font-bold text-slate-800 text-[12px]">{a.title}</p>
+                      <p className="text-[11px] text-slate-500 mt-0.5 truncate">{a.content}</p>
                     </div>
                   ))}
                 </div>
@@ -634,7 +889,7 @@ export default function AdminDashboard({ user, onLogout }) {
                 <p className="text-xs font-bold text-slate-900 leading-tight">
                   {user?.full_name || 'Admin'}
                 </p>
-                <p className="text-[10px] text-slate-500 capitalize">
+                <p className="text-[11px] text-slate-500 capitalize">
                   {user?.role || 'Admin'}
                 </p>
               </div>
@@ -645,8 +900,8 @@ export default function AdminDashboard({ user, onLogout }) {
               <div className="absolute right-0 mt-2 w-56 bg-white border border-slate-200 rounded-xl shadow-lg p-2 z-40 text-xs">
                 <div className="px-3 py-2 border-b border-slate-100 mb-1">
                   <p className="font-bold text-slate-900">{user?.full_name || 'Admin'}</p>
-                  <p className="text-[11px] text-slate-500 font-mono truncate">{user?.email}</p>
-                  <span className="inline-block mt-1 px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                  <p className="text-[12px] text-slate-500 font-mono truncate">{user?.email}</p>
+                  <span className="inline-block mt-1 px-2 py-0.5 rounded text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
                     Authorized Administrator
                   </span>
                 </div>
@@ -686,7 +941,7 @@ export default function AdminDashboard({ user, onLogout }) {
               <h2 className="text-sm font-bold text-slate-900 tracking-tight leading-tight">
                 VentureBharat
               </h2>
-              <p className="text-[11px] font-semibold text-emerald-700">
+              <p className="text-[12px] font-semibold text-emerald-700">
                 Incubator &amp; Portfolio Hub
               </p>
             </div>
@@ -694,12 +949,13 @@ export default function AdminDashboard({ user, onLogout }) {
 
           {/* Navigation Links */}
           <nav className="flex-1 p-3.5 space-y-1 overflow-y-auto">
-            <div className="px-3 pt-2 pb-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+            <div className="px-3 pt-2 pb-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-500">
               Portfolio Management
             </div>
 
             <button
               onClick={() => setActiveNav('overview')}
+              aria-current={activeNav === 'overview' ? 'page' : undefined}
               className={`w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-lg text-xs font-medium transition ${
                 activeNav === 'overview'
                   ? 'bg-emerald-50 text-emerald-800 font-bold border-l-4 border-emerald-600 shadow-xs'
@@ -712,6 +968,7 @@ export default function AdminDashboard({ user, onLogout }) {
 
             <button
               onClick={() => setActiveNav('portfolio')}
+              aria-current={activeNav === 'portfolio' ? 'page' : undefined}
               className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg text-xs font-medium transition ${
                 activeNav === 'portfolio'
                   ? 'bg-emerald-50 text-emerald-800 font-bold border-l-4 border-emerald-600 shadow-xs'
@@ -722,7 +979,7 @@ export default function AdminDashboard({ user, onLogout }) {
                 <FolderKanban className={`w-4 h-4 ${activeNav === 'portfolio' ? 'text-emerald-700' : 'text-slate-500'}`} />
                 <span>Startup Portfolio</span>
               </div>
-              <span className="text-[10px] font-bold bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">
+              <span className="text-[11px] font-bold bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">
                 {totalCount}
               </span>
             </button>
@@ -742,6 +999,7 @@ export default function AdminDashboard({ user, onLogout }) {
 
             <button
               onClick={() => setActiveNav('documents')}
+              aria-current={activeNav === 'documents' ? 'page' : undefined}
               className={`w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-lg text-xs font-medium transition ${
                 activeNav === 'documents'
                   ? 'bg-emerald-50 text-emerald-800 font-bold border-l-4 border-emerald-600 shadow-xs'
@@ -752,12 +1010,53 @@ export default function AdminDashboard({ user, onLogout }) {
               <span>Documents &amp; Compliance</span>
             </button>
 
-            <div className="pt-4 px-3 pb-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+            <button
+              onClick={() => setActiveNav('progress')}
+              aria-current={activeNav === 'progress' ? 'page' : undefined}
+              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg text-xs font-medium transition ${
+                activeNav === 'progress'
+                  ? 'bg-emerald-50 text-emerald-800 font-bold border-l-4 border-emerald-600 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+              }`}
+            >
+              <div className="flex items-center space-x-3">
+                <Activity className={`w-4 h-4 ${activeNav === 'progress' ? 'text-emerald-700' : 'text-slate-500'}`} />
+                <span>Progress Monitoring</span>
+              </div>
+              {pendingActivityReviews > 0 && (
+                <span className="text-[11px] font-black bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full" title="Activities awaiting verification">
+                  {pendingActivityReviews}
+                </span>
+              )}
+            </button>
+
+            <button
+              onClick={() => setActiveNav('monthly')}
+              aria-current={activeNav === 'monthly' ? 'page' : undefined}
+              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg text-xs font-medium transition ${
+                activeNav === 'monthly'
+                  ? 'bg-emerald-50 text-emerald-800 font-bold border-l-4 border-emerald-600 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+              }`}
+            >
+              <div className="flex items-center space-x-3">
+                <ClipboardList className={`w-4 h-4 ${activeNav === 'monthly' ? 'text-emerald-700' : 'text-slate-500'}`} />
+                <span>Monthly Progress</span>
+              </div>
+              {pendingMonthlyLogs > 0 && (
+                <span className="text-[11px] font-black bg-slate-100 text-slate-700 px-2 py-0.5 rounded-full" title="Startups without a log this month">
+                  {pendingMonthlyLogs}
+                </span>
+              )}
+            </button>
+
+            <div className="pt-4 px-3 pb-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-500">
               Stakeholder Network
             </div>
 
             <button
               onClick={() => setActiveNav('investors')}
+              aria-current={activeNav === 'investors' ? 'page' : undefined}
               className={`w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-lg text-xs font-medium transition ${
                 activeNav === 'investors'
                   ? 'bg-emerald-50 text-emerald-800 font-bold border-l-4 border-emerald-600 shadow-xs'
@@ -770,18 +1069,27 @@ export default function AdminDashboard({ user, onLogout }) {
 
             <button
               onClick={() => setActiveNav('mentors')}
+              aria-current={activeNav === 'mentors' ? 'page' : undefined}
               className={`w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-lg text-xs font-medium transition ${
                 activeNav === 'mentors'
                   ? 'bg-emerald-50 text-emerald-800 font-bold border-l-4 border-emerald-600 shadow-xs'
                   : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
               }`}
             >
-              <Users className={`w-4 h-4 ${activeNav === 'mentors' ? 'text-emerald-700' : 'text-slate-500'}`} />
-              <span>Mentor Directory</span>
+              <div className="flex items-center space-x-3">
+                <Users className={`w-4 h-4 ${activeNav === 'mentors' ? 'text-emerald-700' : 'text-slate-500'}`} />
+                <span>Mentor Directory</span>
+              </div>
+              {pendingBookingsCount > 0 && (
+                <span className="text-[10px] font-black bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full">
+                  {pendingBookingsCount}
+                </span>
+              )}
             </button>
 
             <button
               onClick={() => setActiveNav('vendors')}
+              aria-current={activeNav === 'vendors' ? 'page' : undefined}
               className={`w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-lg text-xs font-medium transition ${
                 activeNav === 'vendors'
                   ? 'bg-emerald-50 text-emerald-800 font-bold border-l-4 border-emerald-600 shadow-xs'
@@ -792,12 +1100,13 @@ export default function AdminDashboard({ user, onLogout }) {
               <span>Approved Vendors</span>
             </button>
 
-            <div className="pt-4 px-3 pb-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+            <div className="pt-4 px-3 pb-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-500">
               Admissions &amp; Operations
             </div>
 
             <button
               onClick={() => setActiveNav('applications')}
+              aria-current={activeNav === 'applications' ? 'page' : undefined}
               className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg text-xs font-medium transition ${
                 activeNav === 'applications'
                   ? 'bg-emerald-50 text-emerald-800 font-bold border-l-4 border-emerald-600 shadow-xs'
@@ -809,7 +1118,7 @@ export default function AdminDashboard({ user, onLogout }) {
                 <span>Cohort Applications</span>
               </div>
               {pendingAppsCount > 0 && (
-                <span className="text-[10px] font-bold bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full">
+                <span className="text-[11px] font-bold bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full">
                   {pendingAppsCount}
                 </span>
               )}
@@ -817,6 +1126,7 @@ export default function AdminDashboard({ user, onLogout }) {
 
             <button
               onClick={() => setActiveNav('communication')}
+              aria-current={activeNav === 'communication' ? 'page' : undefined}
               className={`w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-lg text-xs font-medium transition ${
                 activeNav === 'communication'
                   ? 'bg-emerald-50 text-emerald-800 font-bold border-l-4 border-emerald-600 shadow-xs'
@@ -829,6 +1139,7 @@ export default function AdminDashboard({ user, onLogout }) {
 
             <button
               onClick={() => setActiveNav('guidance')}
+              aria-current={activeNav === 'guidance' ? 'page' : undefined}
               className={`w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-lg text-xs font-medium transition ${
                 activeNav === 'guidance'
                   ? 'bg-emerald-50 text-emerald-800 font-bold border-l-4 border-emerald-600 shadow-xs'
@@ -841,14 +1152,22 @@ export default function AdminDashboard({ user, onLogout }) {
 
             <button
               onClick={() => setActiveNav('support')}
+              aria-current={activeNav === 'support' ? 'page' : undefined}
               className={`w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-lg text-xs font-medium transition ${
                 activeNav === 'support'
                   ? 'bg-emerald-50 text-emerald-800 font-bold border-l-4 border-emerald-600 shadow-xs'
                   : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
               }`}
             >
-              <LifeBuoy className={`w-4 h-4 ${activeNav === 'support' ? 'text-emerald-700' : 'text-slate-500'}`} />
-              <span>Support Requests</span>
+              <div className="flex items-center space-x-3">
+                <LifeBuoy className={`w-4 h-4 ${activeNav === 'support' ? 'text-emerald-700' : 'text-slate-500'}`} />
+                <span>Support Requests</span>
+              </div>
+              {pendingTicketsCount + pendingCallbacksCount > 0 && (
+                <span className="text-[10px] font-black bg-rose-100 text-rose-800 px-2 py-0.5 rounded-full">
+                  {pendingTicketsCount + pendingCallbacksCount}
+                </span>
+              )}
             </button>
           </nav>
 
@@ -861,7 +1180,7 @@ export default function AdminDashboard({ user, onLogout }) {
               <p className="text-xs font-bold text-slate-800 truncate leading-tight">
                 {user?.full_name || 'Admin'}
               </p>
-              <p className="text-[10px] text-emerald-700 font-semibold truncate">
+              <p className="text-[11px] text-emerald-700 font-semibold truncate">
                 Authorized Administrator
               </p>
             </div>
@@ -873,6 +1192,7 @@ export default function AdminDashboard({ user, onLogout }) {
           <div className="lg:hidden absolute top-0 left-0 right-0 z-30 bg-white border-b border-slate-200 p-4 space-y-2 text-xs shadow-lg max-h-[80vh] overflow-y-auto">
             <button
               onClick={() => { setActiveNav('overview'); setMobileMenuOpen(false); }}
+              aria-current={activeNav === 'overview' ? 'page' : undefined}
               className={`w-full flex items-center space-x-2 p-2.5 rounded-lg ${activeNav === 'overview' ? 'bg-emerald-50 text-emerald-800 font-bold' : 'text-slate-600'}`}
             >
               <LayoutDashboard className="w-4 h-4 text-emerald-600" />
@@ -880,6 +1200,7 @@ export default function AdminDashboard({ user, onLogout }) {
             </button>
             <button
               onClick={() => { setActiveNav('portfolio'); setMobileMenuOpen(false); }}
+              aria-current={activeNav === 'portfolio' ? 'page' : undefined}
               className={`w-full flex items-center space-x-2 p-2.5 rounded-lg ${activeNav === 'portfolio' ? 'bg-emerald-50 text-emerald-800 font-bold' : 'text-slate-600'}`}
             >
               <FolderKanban className="w-4 h-4 text-emerald-600" />
@@ -894,13 +1215,34 @@ export default function AdminDashboard({ user, onLogout }) {
             </button>
             <button
               onClick={() => { setActiveNav('documents'); setMobileMenuOpen(false); }}
+              aria-current={activeNav === 'documents' ? 'page' : undefined}
               className={`w-full flex items-center space-x-2 p-2.5 rounded-lg ${activeNav === 'documents' ? 'bg-emerald-50 text-emerald-800 font-bold' : 'text-slate-600'}`}
             >
               <FileCheck2 className="w-4 h-4 text-emerald-600" />
               <span>Documents &amp; Compliance</span>
             </button>
             <button
+              onClick={() => { setActiveNav('progress'); setMobileMenuOpen(false); }}
+              aria-current={activeNav === 'progress' ? 'page' : undefined}
+              className={`w-full flex items-center space-x-2 p-2.5 rounded-lg ${activeNav === 'progress' ? 'bg-emerald-50 text-emerald-800 font-bold' : 'text-slate-600'}`}
+            >
+              <Activity className="w-4 h-4 text-emerald-600" />
+              <span>Progress Monitoring</span>
+              {pendingActivityReviews > 0 && (
+                <span className="ml-auto text-[11px] font-black bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full">{pendingActivityReviews}</span>
+              )}
+            </button>
+            <button
+              onClick={() => { setActiveNav('monthly'); setMobileMenuOpen(false); }}
+              aria-current={activeNav === 'monthly' ? 'page' : undefined}
+              className={`w-full flex items-center space-x-2 p-2.5 rounded-lg ${activeNav === 'monthly' ? 'bg-emerald-50 text-emerald-800 font-bold' : 'text-slate-600'}`}
+            >
+              <ClipboardList className="w-4 h-4 text-emerald-600" />
+              <span>Monthly Progress</span>
+            </button>
+            <button
               onClick={() => { setActiveNav('investors'); setMobileMenuOpen(false); }}
+              aria-current={activeNav === 'investors' ? 'page' : undefined}
               className={`w-full flex items-center space-x-2 p-2.5 rounded-lg ${activeNav === 'investors' ? 'bg-emerald-50 text-emerald-800 font-bold' : 'text-slate-600'}`}
             >
               <TrendingUp className="w-4 h-4 text-emerald-600" />
@@ -908,13 +1250,22 @@ export default function AdminDashboard({ user, onLogout }) {
             </button>
             <button
               onClick={() => { setActiveNav('mentors'); setMobileMenuOpen(false); }}
+              aria-current={activeNav === 'mentors' ? 'page' : undefined}
               className={`w-full flex items-center space-x-2 p-2.5 rounded-lg ${activeNav === 'mentors' ? 'bg-emerald-50 text-emerald-800 font-bold' : 'text-slate-600'}`}
             >
-              <Users className="w-4 h-4 text-emerald-600" />
-              <span>Mentor Directory</span>
+              <div className="flex items-center space-x-2">
+                <Users className="w-4 h-4 text-emerald-600" />
+                <span>Mentor Directory</span>
+              </div>
+              {pendingBookingsCount > 0 && (
+                <span className="text-[10px] font-black bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full ml-auto">
+                  {pendingBookingsCount}
+                </span>
+              )}
             </button>
             <button
               onClick={() => { setActiveNav('vendors'); setMobileMenuOpen(false); }}
+              aria-current={activeNav === 'vendors' ? 'page' : undefined}
               className={`w-full flex items-center space-x-2 p-2.5 rounded-lg ${activeNav === 'vendors' ? 'bg-emerald-50 text-emerald-800 font-bold' : 'text-slate-600'}`}
             >
               <Gift className="w-4 h-4 text-emerald-600" />
@@ -922,6 +1273,7 @@ export default function AdminDashboard({ user, onLogout }) {
             </button>
             <button
               onClick={() => { setActiveNav('applications'); setMobileMenuOpen(false); }}
+              aria-current={activeNav === 'applications' ? 'page' : undefined}
               className={`w-full flex items-center space-x-2 p-2.5 rounded-lg ${activeNav === 'applications' ? 'bg-emerald-50 text-emerald-800 font-bold' : 'text-slate-600'}`}
             >
               <FileText className="w-4 h-4 text-emerald-600" />
@@ -929,6 +1281,7 @@ export default function AdminDashboard({ user, onLogout }) {
             </button>
             <button
               onClick={() => { setActiveNav('communication'); setMobileMenuOpen(false); }}
+              aria-current={activeNav === 'communication' ? 'page' : undefined}
               className={`w-full flex items-center space-x-2 p-2.5 rounded-lg ${activeNav === 'communication' ? 'bg-emerald-50 text-emerald-800 font-bold' : 'text-slate-600'}`}
             >
               <Send className="w-4 h-4 text-emerald-600" />
@@ -936,6 +1289,7 @@ export default function AdminDashboard({ user, onLogout }) {
             </button>
             <button
               onClick={() => { setActiveNav('guidance'); setMobileMenuOpen(false); }}
+              aria-current={activeNav === 'guidance' ? 'page' : undefined}
               className={`w-full flex items-center space-x-2 p-2.5 rounded-lg ${activeNav === 'guidance' ? 'bg-emerald-50 text-emerald-800 font-bold' : 'text-slate-600'}`}
             >
               <Compass className="w-4 h-4 text-emerald-600" />
@@ -943,10 +1297,18 @@ export default function AdminDashboard({ user, onLogout }) {
             </button>
             <button
               onClick={() => { setActiveNav('support'); setMobileMenuOpen(false); }}
+              aria-current={activeNav === 'support' ? 'page' : undefined}
               className={`w-full flex items-center space-x-2 p-2.5 rounded-lg ${activeNav === 'support' ? 'bg-emerald-50 text-emerald-800 font-bold' : 'text-slate-600'}`}
             >
-              <LifeBuoy className="w-4 h-4 text-emerald-600" />
-              <span>Support Requests</span>
+              <div className="flex items-center space-x-2">
+                <LifeBuoy className="w-4 h-4 text-emerald-600" />
+                <span>Support Requests</span>
+              </div>
+              {pendingTicketsCount + pendingCallbacksCount > 0 && (
+                <span className="text-[10px] font-black bg-rose-100 text-rose-800 px-2 py-0.5 rounded-full ml-auto">
+                  {pendingTicketsCount + pendingCallbacksCount}
+                </span>
+              )}
             </button>
           </div>
         )}
@@ -957,7 +1319,7 @@ export default function AdminDashboard({ user, onLogout }) {
 
             {/* ================= OVERVIEW CARDS (Visible on Overview & Portfolio & Applications) ================= */}
             {['overview', 'portfolio', 'documents', 'applications'].includes(activeNav) && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
                 
                 {/* 1. Total Startups Card */}
                 <div className="p-5 rounded-xl bg-white border border-slate-200/90 shadow-xs hover:shadow-sm transition">
@@ -1039,9 +1401,10 @@ export default function AdminDashboard({ user, onLogout }) {
               <div className="space-y-6">
                 
                 {/* Welcome Callout Banner */}
-                <div className="p-6 rounded-2xl bg-gradient-to-r from-emerald-700 via-emerald-800 to-teal-800 text-white shadow-sm relative overflow-hidden">
-                  <div className="relative z-10 max-w-2xl">
-                    <div className="inline-flex items-center space-x-1.5 px-2.5 py-0.5 rounded-full bg-white/15 text-[11px] font-semibold text-emerald-100 mb-2.5">
+                <div className="p-6 rounded-2xl bg-gradient-to-r from-emerald-700 via-emerald-800 to-teal-800 text-white shadow-card relative overflow-hidden flex flex-col lg:flex-row lg:items-center gap-6">
+                  <div className="absolute -right-16 -top-24 w-72 h-72 rounded-full bg-white/5 pointer-events-none" />
+                  <div className="relative z-10 max-w-2xl flex-1">
+                    <div className="inline-flex items-center space-x-1.5 px-2.5 py-0.5 rounded-full bg-white/15 text-[12px] font-semibold text-emerald-100 mb-2.5">
                       <Sparkles className="w-3.5 h-3.5" />
                       <span>Portfolio Management System Active</span>
                     </div>
@@ -1067,110 +1430,586 @@ export default function AdminDashboard({ user, onLogout }) {
                       </button>
                     </div>
                   </div>
+
+                  {/* Needs attention: live counts from applications & compliance documents */}
+                  <div className="relative z-10 w-full lg:w-80 shrink-0 rounded-xl bg-white/10 border border-white/15 p-4 backdrop-blur-sm">
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-emerald-100 mb-2.5">Needs your attention</p>
+                    {pendingTicketsCount + pendingCallbacksCount + pendingBookingsCount + pendingAppsCount + reviewDocs + pendingMonthlyLogs + pendingActivityReviews === 0 ? (
+                      <p className="text-xs text-emerald-50 flex items-center gap-2">
+                        <CheckCircle2 className="w-4 h-4" /> All caught up. No pending reviews.
+                      </p>
+                    ) : (
+                      <ul className="space-y-1.5">
+                        {[
+                          { count: pendingActivityReviews, label: `startup activit${pendingActivityReviews === 1 ? 'y' : 'ies'} awaiting verification`, nav: 'progress', Icon: Activity },
+                          { count: pendingTicketsCount, label: `support complaint${pendingTicketsCount === 1 ? '' : 's'} awaiting response`, nav: 'support', Icon: LifeBuoy },
+                          { count: pendingCallbacksCount, label: `callback request${pendingCallbacksCount === 1 ? '' : 's'} pending`, nav: 'support', Icon: Phone },
+                          { count: pendingBookingsCount, label: `mentor session${pendingBookingsCount === 1 ? '' : 's'} requested`, nav: 'mentors', Icon: Users },
+                          { count: pendingAppsCount, label: `application${pendingAppsCount === 1 ? '' : 's'} awaiting screening`, nav: 'applications', Icon: Inbox },
+                          { count: reviewDocs, label: `document${reviewDocs === 1 ? '' : 's'} under review`, nav: 'documents', Icon: Clock },
+                          { count: pendingMonthlyLogs, label: `startup${pendingMonthlyLogs === 1 ? '' : 's'} without a ${monthLabel(currentMonth, 'short')} work log`, nav: 'monthly', Icon: ClipboardList }
+                        ]
+                          .filter((item) => item.count > 0)
+                          .map(({ count, label, nav, Icon }) => (
+                            <li key={label}>
+                              <button
+                                onClick={() => setActiveNav(nav)}
+                                className="w-full flex items-center justify-between gap-2 px-2.5 py-2 rounded-lg bg-white/5 hover:bg-white/15 text-left text-xs transition group"
+                              >
+                                <span className="flex items-center gap-2 text-emerald-50">
+                                  <Icon className="w-3.5 h-3.5 shrink-0" />
+                                  <span><strong className="text-white">{count}</strong> {label}</span>
+                                </span>
+                                <ChevronRight className="w-3.5 h-3.5 text-emerald-200 group-hover:translate-x-0.5 transition" />
+                              </button>
+                            </li>
+                          ))}
+                      </ul>
+                    )}
+                  </div>
                 </div>
 
-                {/* Quick Highlights: Sector breakdown & Recent additions */}
+                {/* How the incubator works: clickable workflow diagram */}
+                <ChartCard
+                  title="How Your Incubator Pipeline Flows"
+                  subtitle="Every venture moves left to right. Click a step to open that workspace."
+                  icon={Workflow}
+                >
+                  <WorkflowDiagram
+                    steps={[
+                      { title: 'Applications', desc: 'Cohort intake awaiting screening', metric: pendingAppsCount, icon: Inbox, state: 'active', onClick: () => setActiveNav('applications') },
+                      { title: 'Evaluate & Admit', desc: 'Panel scoring & admission', metric: acceptedAppsCount, icon: UserCheck, state: 'active', onClick: () => setActiveNav('applications') },
+                      { title: 'Portfolio', desc: 'Ventures under incubation', metric: totalCount, icon: Building2, state: 'done', onClick: () => setActiveNav('portfolio') },
+                      { title: 'Compliance', desc: 'MCA, PAN, DPIIT & UC checks', metric: `${Math.round(compliancePct)}%`, icon: ShieldCheck, state: 'done', onClick: () => setActiveNav('documents') },
+                      { title: 'Grants', desc: 'Seed fund tranches released', metric: formatINR(totalDisbursed), icon: IndianRupee, state: 'done', onClick: () => setActiveNav('portfolio') }
+                    ]}
+                  />
+                </ChartCard>
+
+                {/* Row 1: Growth trend + Stage mix */}
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                  
-                  {/* Recent Portfolio Additions Table */}
-                  <div className="lg:col-span-8 p-6 rounded-xl bg-white border border-slate-200/90 shadow-xs">
-                    <div className="flex items-center justify-between pb-4 border-b border-slate-100">
-                      <div>
-                        <h3 className="text-sm font-bold text-slate-900">
-                          Recent Portfolio Additions
-                        </h3>
-                        <p className="text-xs text-slate-500">
-                          Latest ventures registered in the incubator directory
-                        </p>
+                  <ChartCard
+                    className="lg:col-span-8"
+                    title="Portfolio Growth"
+                    subtitle="Cumulative startups enrolled, month by month (hover to inspect)"
+                    icon={Activity}
+                  >
+                    <AreaChart points={growthChartData} seriesLabel="Startups" />
+                  </ChartCard>
+
+                  <ChartCard
+                    className="lg:col-span-4"
+                    title="Portfolio by Stage"
+                    subtitle="Where ventures sit in the lifecycle"
+                    icon={PieChart}
+                  >
+                    <DonutChart data={stageChartData} centerLabel="Total startups" />
+                  </ChartCard>
+                </div>
+
+                {/* Row 2: Application funnel + Grant utilisation */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <ChartCard
+                    title="Application Pipeline"
+                    subtitle={`${applications.length} applications in the current intake. Click a stage to review.`}
+                    icon={BarChart3}
+                    action={
+                      <button
+                        onClick={() => setActiveNav('applications')}
+                        className="text-xs text-emerald-700 hover:text-emerald-800 font-semibold flex items-center gap-1 shrink-0"
+                      >
+                        <span>Review</span>
+                        <ChevronRight className="w-3.5 h-3.5" />
+                      </button>
+                    }
+                  >
+                    <PipelineChart
+                      stages={pipelineStages}
+                      onStageClick={(s) => {
+                        setAppStatusFilter(s.label);
+                        setAppPage(1);
+                        setActiveNav('applications');
+                      }}
+                    />
+                  </ChartCard>
+
+                  <ChartCard
+                    title="Seed Grant Utilisation"
+                    subtitle={`${formatINR(totalDisbursed)} disbursed of ${formatINR(totalSanctioned)} sanctioned (${totalSanctioned ? Math.round((totalDisbursed / totalSanctioned) * 100) : 0}%)`}
+                    icon={IndianRupee}
+                  >
+                    {grantChartData.length === 0 ? (
+                      <p className="py-8 text-center text-xs text-slate-500">No grants sanctioned yet.</p>
+                    ) : (
+                      <BulletList data={grantChartData} />
+                    )}
+                  </ChartCard>
+                </div>
+
+                {/* Row 3: Sector mix + Compliance + Recent additions */}
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                  <ChartCard title="Sector Mix" subtitle="Startups per focus sector" icon={BarChart3}>
+                    <HBarChart data={sectorChartData} emptyText="No startups added yet." />
+                  </ChartCard>
+
+                  <ChartCard
+                    title="Compliance Health"
+                    subtitle={`${allDocs.length} statutory documents tracked`}
+                    icon={ShieldCheck}
+                  >
+                    <div className="flex items-center gap-4">
+                      <ProgressRing value={compliancePct} label="verified" />
+                      <ul className="flex-1 space-y-1.5 text-xs">
+                        <li className="flex items-center justify-between">
+                          <span className="flex items-center gap-1.5 text-slate-600">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Verified
+                          </span>
+                          <strong className="text-slate-900">{verifiedDocs}</strong>
+                        </li>
+                        <li className="flex items-center justify-between">
+                          <span className="flex items-center gap-1.5 text-slate-600">
+                            <Clock className="w-3.5 h-3.5 text-amber-600" /> Under review
+                          </span>
+                          <strong className="text-slate-900">{reviewDocs}</strong>
+                        </li>
+                        <li className="flex items-center justify-between">
+                          <span className="flex items-center gap-1.5 text-slate-600">
+                            <AlertCircle className="w-3.5 h-3.5 text-rose-600" /> Pending / other
+                          </span>
+                          <strong className="text-slate-900">{otherDocs}</strong>
+                        </li>
+                      </ul>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 mt-4 text-[12px]">
+                      <div className="p-2 bg-slate-50 rounded-lg border border-slate-200/80">
+                        <p className="text-slate-500">Incorporated</p>
+                        <p className="font-bold text-emerald-700 text-sm">{incorporatedPct}%</p>
                       </div>
+                      <div className="p-2 bg-slate-50 rounded-lg border border-slate-200/80">
+                        <p className="text-slate-500">DPIIT recognised</p>
+                        <p className="font-bold text-emerald-700 text-sm">{dpiitPct}%</p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setActiveNav('documents')}
+                      className="w-full mt-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg text-xs font-bold transition text-center"
+                    >
+                      Open Compliance Tracker
+                    </button>
+                  </ChartCard>
+
+                  <ChartCard
+                    className="md:col-span-2 xl:col-span-1"
+                    title="Recent Portfolio Additions"
+                    subtitle="Latest ventures in the directory"
+                    icon={Building2}
+                    action={
                       <button
                         onClick={() => setActiveNav('portfolio')}
-                        className="text-xs text-emerald-700 hover:text-emerald-800 font-semibold flex items-center gap-1"
+                        className="text-xs text-emerald-700 hover:text-emerald-800 font-semibold flex items-center gap-1 shrink-0"
                       >
                         <span>View All</span>
                         <ChevronRight className="w-3.5 h-3.5" />
                       </button>
-                    </div>
-
+                    }
+                  >
                     {startups.length === 0 ? (
-                      <div className="py-12 text-center text-slate-500 text-xs">
+                      <div className="py-8 text-center text-slate-500 text-xs">
                         <Building2 className="w-8 h-8 text-slate-300 mx-auto mb-2" />
                         <p className="font-semibold text-slate-700">No startups added yet.</p>
                         <p className="text-slate-500 mt-0.5">Click "Add Startup" to create your first portfolio entry.</p>
                       </div>
                     ) : (
-                      <div className="divide-y divide-slate-100 mt-2">
+                      <div className="divide-y divide-slate-100 -mt-1">
                         {startups.slice(0, 4).map((s) => (
-                          <div key={s.id} className="py-3 flex items-center justify-between text-xs">
-                            <div className="flex items-center space-x-3">
-                              <div className="w-9 h-9 rounded-lg bg-emerald-50 border border-emerald-100 text-emerald-800 font-bold flex items-center justify-center text-xs">
+                          <button
+                            key={s.id}
+                            onClick={() => setSelectedStartup(s)}
+                            title="View Details"
+                            className="w-full py-2.5 flex items-center justify-between text-xs text-left hover:bg-slate-50 rounded-lg px-1 transition"
+                          >
+                            <div className="flex items-center space-x-2.5 min-w-0">
+                              <div className="w-8 h-8 rounded-lg bg-emerald-50 border border-emerald-100 text-emerald-800 font-bold flex items-center justify-center text-[12px] shrink-0">
                                 {s.startup_name.slice(0, 2).toUpperCase()}
                               </div>
-                              <div>
-                                <h4 className="font-bold text-slate-900">{s.startup_name}</h4>
-                                <p className="text-slate-500 text-[11px]">
-                                  Founder: <span className="text-slate-700 font-medium">{s.founder_name}</span> • {s.sector}
-                                </p>
+                              <div className="min-w-0">
+                                <h4 className="font-bold text-slate-900 truncate">{s.startup_name}</h4>
+                                <p className="text-slate-500 text-[12px] truncate">{s.founder_name} • {s.sector}</p>
                               </div>
                             </div>
+                            <span
+                              className={`ml-2 px-2 py-0.5 rounded-full text-[11px] font-bold border shrink-0 ${
+                                s.status === 'Alumni' || s.stage === 'Graduated'
+                                  ? 'bg-blue-50 text-blue-700 border-blue-200'
+                                  : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                              }`}
+                            >
+                              {s.status || (s.stage === 'Graduated' ? 'Alumni' : 'Active')}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </ChartCard>
+                </div>
 
-                            <div className="flex items-center space-x-3">
+                {/* ================= MONTHLY WORK LOG SNAPSHOT ================= */}
+                <ChartCard
+                  title={`Monthly Work Log: ${monthLabel(currentMonth)}`}
+                  subtitle="Progress you have recorded for each startup this month"
+                  icon={ClipboardList}
+                  action={
+                    <button
+                      onClick={() => setActiveNav('monthly')}
+                      className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 rounded-lg text-xs font-bold transition flex items-center gap-1 shrink-0"
+                    >
+                      Open log
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                  }
+                >
+                  {startups.length === 0 ? (
+                    <p className="py-6 text-center text-xs text-slate-500">Add startups to the portfolio to start logging monthly work.</p>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-5 items-center">
+                      <div>
+                        <p className="text-3xl font-black text-slate-900 tabular-nums">
+                          {loggedThisMonth}
+                          <span className="text-base font-bold text-slate-500"> / {startups.length}</span>
+                        </p>
+                        <p className="text-xs text-slate-500 mt-0.5">startups logged this month</p>
+                        <div className="mt-3 h-2 rounded-full bg-slate-100 overflow-hidden" role="img" aria-label={`${loggedThisMonth} of ${startups.length} logged`}>
+                          <div className="h-full rounded-full bg-emerald-600 transition-all duration-500" style={{ width: `${(loggedThisMonth / startups.length) * 100}%` }} />
+                        </div>
+                      </div>
+                      <div className="md:col-span-2 grid grid-cols-2 sm:grid-cols-4 gap-2">
+                        {[
+                          { label: 'On track', value: monthlyStatusCounts[0], color: '#059669' },
+                          { label: 'Needs attention', value: monthlyStatusCounts[1], color: '#d97706' },
+                          { label: 'At risk', value: monthlyStatusCounts[2], color: '#e11d48' },
+                          { label: 'Not logged', value: pendingMonthlyLogs, color: '#94a3b8' }
+                        ].map((k) => (
+                          <button
+                            key={k.label}
+                            onClick={() => setActiveNav('monthly')}
+                            className="p-3 rounded-xl border border-slate-200 bg-slate-50 hover:bg-white hover:border-slate-300 text-left transition"
+                          >
+                            <span className="flex items-center gap-1.5 text-[12px] text-slate-600">
+                              <span className="w-2.5 h-2.5 rounded-sm" style={{ background: k.color }} />
+                              {k.label}
+                            </span>
+                            <strong className="block text-xl font-black text-slate-900 mt-1 tabular-nums">{k.value}</strong>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </ChartCard>
+
+                {/* ================= LIVE FOUNDER INQUIRIES & ACTION QUEUE ================= */}
+                <div className="p-6 bg-white border border-slate-200/90 rounded-2xl shadow-xs space-y-4">
+                  <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 pb-4 border-b border-slate-100">
+                    <div>
+                      <div className="flex items-center space-x-2 text-xs font-bold text-emerald-700 uppercase tracking-wider">
+                        <LifeBuoy className="w-4 h-4 text-emerald-600" />
+                        <span>Live Founder Inquiries &amp; Action Queue</span>
+                      </div>
+                      <h3 className="text-lg font-black text-slate-900 mt-0.5">
+                        Founder Complaints, Callbacks &amp; Mentor Appointments
+                      </h3>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        Real-time incoming requests from approved cohort ventures. Take direct action or manage in full workspaces.
+                      </p>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="flex items-center p-1 bg-slate-100 rounded-xl text-xs font-bold">
+                        <button
+                          onClick={() => setInquiryTab('all')}
+                          className={`px-3 py-1.5 rounded-lg transition ${
+                            inquiryTab === 'all'
+                              ? 'bg-white text-slate-900 shadow-xs'
+                              : 'text-slate-600 hover:text-slate-900'
+                          }`}
+                        >
+                          All ({activeSupportTickets.length + activeCallbackRequests.length + mentorBookings.length})
+                        </button>
+                        <button
+                          onClick={() => setInquiryTab('tickets')}
+                          className={`px-3 py-1.5 rounded-lg transition flex items-center gap-1.5 ${
+                            inquiryTab === 'tickets'
+                              ? 'bg-white text-slate-900 shadow-xs'
+                              : 'text-slate-600 hover:text-slate-900'
+                          }`}
+                        >
+                          <span>Tickets</span>
+                          {pendingTicketsCount > 0 && (
+                            <span className="px-1.5 py-0.2 bg-rose-100 text-rose-800 rounded-full text-[10px] font-black">
+                              {pendingTicketsCount}
+                            </span>
+                          )}
+                        </button>
+                        <button
+                          onClick={() => setInquiryTab('callbacks')}
+                          className={`px-3 py-1.5 rounded-lg transition flex items-center gap-1.5 ${
+                            inquiryTab === 'callbacks'
+                              ? 'bg-white text-slate-900 shadow-xs'
+                              : 'text-slate-600 hover:text-slate-900'
+                          }`}
+                        >
+                          <span>Callbacks</span>
+                          {pendingCallbacksCount > 0 && (
+                            <span className="px-1.5 py-0.2 bg-amber-100 text-amber-800 rounded-full text-[10px] font-black">
+                              {pendingCallbacksCount}
+                            </span>
+                          )}
+                        </button>
+                        <button
+                          onClick={() => setInquiryTab('mentors')}
+                          className={`px-3 py-1.5 rounded-lg transition flex items-center gap-1.5 ${
+                            inquiryTab === 'mentors'
+                              ? 'bg-white text-slate-900 shadow-xs'
+                              : 'text-slate-600 hover:text-slate-900'
+                          }`}
+                        >
+                          <span>Mentor Sessions</span>
+                          {pendingBookingsCount > 0 && (
+                            <span className="px-1.5 py-0.2 bg-blue-100 text-blue-800 rounded-full text-[10px] font-black">
+                              {pendingBookingsCount}
+                            </span>
+                          )}
+                        </button>
+                      </div>
+
+                      <button
+                        onClick={() => setActiveNav('support')}
+                        className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 rounded-lg text-xs font-bold transition flex items-center gap-1"
+                      >
+                        <LifeBuoy className="w-3.5 h-3.5" />
+                        <span>Support Desk</span>
+                      </button>
+                      <button
+                        onClick={() => setActiveNav('mentors')}
+                        className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-800 rounded-lg text-xs font-bold transition flex items-center gap-1"
+                      >
+                        <Users className="w-3.5 h-3.5" />
+                        <span>Mentor Roster</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Cards Grid */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {/* Support Tickets */}
+                    {(inquiryTab === 'all' || inquiryTab === 'tickets') &&
+                      activeSupportTickets.map((tkt) => (
+                        <div
+                          key={'tkt_' + tkt.id}
+                          className="p-4 rounded-xl border border-slate-200/90 bg-white hover:border-slate-300 shadow-xs space-y-3 transition flex flex-col justify-between"
+                        >
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-rose-50 text-rose-700 border border-rose-200">
+                                {tkt.ticket_number || 'TICKET'}
+                              </span>
                               <span
-                                className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
-                                  s.status === 'Alumni' || s.stage === 'Graduated'
-                                    ? 'bg-blue-50 text-blue-700 border-blue-200'
-                                    : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                  tkt.status === 'Open'
+                                    ? 'bg-amber-100 text-amber-800'
+                                    : tkt.status === 'In Progress'
+                                    ? 'bg-blue-100 text-blue-800'
+                                    : 'bg-emerald-100 text-emerald-800'
                                 }`}
                               >
-                                {s.status || (s.stage === 'Graduated' ? 'Alumni' : 'Active')}
+                                {tkt.status}
                               </span>
+                            </div>
+
+                            <div>
+                              <h4 className="font-bold text-slate-900 text-xs line-clamp-1">{tkt.subject}</h4>
+                              <p className="text-[11px] text-slate-500 mt-0.5">
+                                <strong>{tkt.startup_name}</strong> • {tkt.founder_name}
+                              </p>
+                            </div>
+
+                            <p className="text-[11px] text-slate-600 line-clamp-2 bg-slate-50 p-2 rounded-lg border border-slate-100">
+                              {tkt.description}
+                            </p>
+                          </div>
+
+                          <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
+                            <span className="text-[10px] text-slate-500 font-semibold">{tkt.category}</span>
+                            <div className="flex items-center gap-1.5">
+                              {tkt.status === 'Open' && (
+                                <button
+                                  onClick={() => handleQuickUpdateTicket(tkt.id, 'In Progress')}
+                                  className="px-2 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded text-[11px] font-bold transition"
+                                >
+                                  In Progress
+                                </button>
+                              )}
+                              {tkt.status !== 'Resolved' && (
+                                <button
+                                  onClick={() => handleQuickUpdateTicket(tkt.id, 'Resolved')}
+                                  className="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded text-[11px] font-bold transition"
+                                >
+                                  Resolve
+                                </button>
+                              )}
                               <button
-                                onClick={() => setSelectedStartup(s)}
-                                className="text-slate-400 hover:text-slate-700 text-xs font-semibold p-1"
-                                title="View Details"
+                                onClick={() => setActiveNav('support')}
+                                className="p-1 text-slate-500 hover:text-slate-800 rounded"
+                                title="Open in Support Desk"
                               >
                                 <ChevronRight className="w-4 h-4" />
                               </button>
                             </div>
                           </div>
-                        ))}
-                      </div>
-                    )}
+                        </div>
+                      ))}
+
+                    {/* Callback Requests */}
+                    {(inquiryTab === 'all' || inquiryTab === 'callbacks') &&
+                      activeCallbackRequests.map((cb) => (
+                        <div
+                          key={'cb_' + cb.id}
+                          className="p-4 rounded-xl border border-slate-200/90 bg-white hover:border-slate-300 shadow-xs space-y-3 transition flex flex-col justify-between"
+                        >
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200">
+                                {cb.reference_number || 'CALLBACK'}
+                              </span>
+                              <span
+                                className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                  cb.status === 'Requested'
+                                    ? 'bg-amber-100 text-amber-800'
+                                    : cb.status === 'Scheduled'
+                                    ? 'bg-blue-100 text-blue-800'
+                                    : 'bg-emerald-100 text-emerald-800'
+                                }`}
+                              >
+                                {cb.status}
+                              </span>
+                            </div>
+
+                            <div>
+                              <h4 className="font-bold text-slate-900 text-xs line-clamp-1">{cb.reason}</h4>
+                              <p className="text-[11px] text-slate-500 mt-0.5">
+                                <strong>{cb.startup_name}</strong> • {cb.founder_name}
+                              </p>
+                              <p className="text-[11px] font-mono text-emerald-700 font-bold mt-0.5 flex items-center gap-1">
+                                <Phone className="w-3 h-3 text-emerald-600" />
+                                {cb.phone}
+                              </p>
+                            </div>
+
+                            <p className="text-[11px] text-slate-600 line-clamp-2 bg-slate-50 p-2 rounded-lg border border-slate-100">
+                              Pref: {cb.preferred_date} • {cb.preferred_time_window}
+                            </p>
+                          </div>
+
+                          <div className="pt-2 border-t border-slate-100 flex items-center justify-end gap-1.5 text-xs">
+                            {cb.status === 'Requested' && (
+                              <button
+                                onClick={() => handleQuickUpdateCallback(cb.id, 'Scheduled')}
+                                className="px-2 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded text-[11px] font-bold transition"
+                              >
+                                Schedule
+                              </button>
+                            )}
+                            {cb.status !== 'Completed' && (
+                              <button
+                                onClick={() => handleQuickUpdateCallback(cb.id, 'Completed')}
+                                className="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded text-[11px] font-bold transition"
+                              >
+                                Complete
+                              </button>
+                            )}
+                            <button
+                              onClick={() => setActiveNav('support')}
+                              className="p-1 text-slate-500 hover:text-slate-800 rounded"
+                              title="Open in Helpdesk"
+                            >
+                              <ChevronRight className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+
+                    {/* Mentor Bookings */}
+                    {(inquiryTab === 'all' || inquiryTab === 'mentors') &&
+                      mentorBookings.map((mb) => (
+                        <div
+                          key={'mb_' + mb.id}
+                          className="p-4 rounded-xl border border-slate-200/90 bg-white hover:border-slate-300 shadow-xs space-y-3 transition flex flex-col justify-between"
+                        >
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">
+                                {mb.reference_number || 'MENTOR'}
+                              </span>
+                              <span
+                                className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                  mb.status === 'Requested'
+                                    ? 'bg-amber-100 text-amber-800'
+                                    : mb.status === 'Scheduled'
+                                    ? 'bg-blue-100 text-blue-800'
+                                    : 'bg-emerald-100 text-emerald-800'
+                                }`}
+                              >
+                                {mb.status}
+                              </span>
+                            </div>
+
+                            <div>
+                              <h4 className="font-bold text-slate-900 text-xs line-clamp-1">{mb.topic}</h4>
+                              <p className="text-[11px] text-slate-500 mt-0.5">
+                                <strong>{mb.startup_name}</strong> &rarr; {mb.mentor_name}
+                              </p>
+                            </div>
+
+                            <p className="text-[11px] text-slate-600 line-clamp-2 bg-slate-50 p-2 rounded-lg border border-slate-100">
+                              Date: {mb.preferred_date} • {mb.preferred_mode}
+                            </p>
+                          </div>
+
+                          <div className="pt-2 border-t border-slate-100 flex items-center justify-end gap-1.5 text-xs">
+                            {mb.status === 'Requested' && (
+                              <button
+                                onClick={() => setActiveNav('mentors')}
+                                className="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[11px] font-bold transition"
+                              >
+                                Confirm &amp; Set Link
+                              </button>
+                            )}
+                            {mb.status === 'Scheduled' && (
+                              <button
+                                onClick={() => handleQuickUpdateBooking(mb.id, 'Completed')}
+                                className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-[11px] font-bold transition"
+                              >
+                                Completed
+                              </button>
+                            )}
+                            <button
+                              onClick={() => setActiveNav('mentors')}
+                              className="p-1 text-slate-500 hover:text-slate-800 rounded"
+                              title="Open in Mentor Roster"
+                            >
+                              <ChevronRight className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
                   </div>
 
-                  {/* Incubator Compliance & Quick Overview */}
-                  <div className="lg:col-span-4 p-6 rounded-xl bg-white border border-slate-200/90 shadow-xs space-y-4">
-                    <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                      <ShieldCheck className="w-4 h-4 text-emerald-600" />
-                      <span>Incubator Compliance Summary</span>
-                    </h3>
-                    <p className="text-xs text-slate-500 leading-relaxed">
-                      Verification tracking for Certificate of Incorporation, MoA/AoA, PAN, and Utilization Certificates across portfolio companies.
-                    </p>
-
-                    <div className="space-y-2.5 text-xs">
-                      <div className="p-3 bg-slate-50 rounded-lg border border-slate-200/80 flex items-center justify-between">
-                        <span className="text-slate-600 font-medium">Incorporation Rate</span>
-                        <span className="font-bold text-emerald-700">100% Pvt Ltd</span>
-                      </div>
-                      <div className="p-3 bg-slate-50 rounded-lg border border-slate-200/80 flex items-center justify-between">
-                        <span className="text-slate-600 font-medium">DPIIT Recognition</span>
-                        <span className="font-bold text-emerald-700">92% Certified</span>
-                      </div>
-                      <div className="p-3 bg-slate-50 rounded-lg border border-slate-200/80 flex items-center justify-between">
-                        <span className="text-slate-600 font-medium">UC Audit Status</span>
-                        <span className="font-bold text-amber-700">1 Under Review</span>
-                      </div>
+                  {activeSupportTickets.length + activeCallbackRequests.length + mentorBookings.length === 0 && (
+                    <div className="py-8 text-center text-slate-500 text-xs">
+                      <CheckCircle2 className="w-8 h-8 text-emerald-500 mx-auto mb-1.5" />
+                      <p className="font-bold text-slate-700">No active complaints, callbacks, or mentor requests.</p>
+                      <p className="text-[11px] text-slate-500 mt-0.5">When startups submit requests from their portal, they will appear here automatically.</p>
                     </div>
-
-                    <button
-                      onClick={() => setActiveNav('documents')}
-                      className="w-full py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg text-xs font-bold transition text-center"
-                    >
-                      Open Compliance Tracker
-                    </button>
-                  </div>
-
+                  )}
                 </div>
 
               </div>
@@ -1186,7 +2025,7 @@ export default function AdminDashboard({ user, onLogout }) {
                     
                     {/* Search Input */}
                     <div className="relative flex-1 w-full">
-                      <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+                      <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
                       <input
                         type="text"
                         value={searchTerm}
@@ -1281,7 +2120,7 @@ export default function AdminDashboard({ user, onLogout }) {
                     {/* Desktop Table */}
                     <div className="overflow-x-auto">
                       <table className="w-full text-left text-xs">
-                        <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase text-[10px] font-bold tracking-wider">
+                        <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase text-[11px] font-bold tracking-wider">
                           <tr>
                             <th className="p-4">Company Name</th>
                             <th className="p-4">Founder</th>
@@ -1303,7 +2142,7 @@ export default function AdminDashboard({ user, onLogout }) {
                                 >
                                   {st.startup_name}
                                 </button>
-                                <p className="text-[11px] text-slate-500 line-clamp-1 max-w-xs mt-0.5">
+                                <p className="text-[12px] text-slate-500 line-clamp-1 max-w-xs mt-0.5">
                                   {st.company_overview || 'No overview provided.'}
                                 </p>
                               </td>
@@ -1314,13 +2153,13 @@ export default function AdminDashboard({ user, onLogout }) {
                                 {st.founder_phone || '—'}
                               </td>
                               <td className="p-4">
-                                <span className="inline-block px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-slate-100 text-slate-700">
+                                <span className="inline-block px-2.5 py-0.5 rounded-full text-[12px] font-medium bg-slate-100 text-slate-700">
                                   {st.sector}
                                 </span>
                               </td>
                               <td className="p-4">
                                 <span
-                                  className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
+                                  className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${
                                     st.status === 'Alumni' || st.stage === 'Graduated'
                                       ? 'bg-blue-50 text-blue-700 border-blue-200'
                                       : 'bg-emerald-50 text-emerald-700 border-emerald-200'
@@ -1329,17 +2168,17 @@ export default function AdminDashboard({ user, onLogout }) {
                                   {st.status || (st.stage === 'Graduated' ? 'Alumni' : 'Active')}
                                 </span>
                               </td>
-                              <td className="p-4 font-mono text-[11px]">
+                              <td className="p-4 font-mono text-[12px]">
                                 {st.mca_number ? (
                                   <div>
                                     <span className="font-semibold text-slate-800">{st.mca_number}</span>
-                                    <p className="text-[10px] text-slate-400 font-sans">{st.incorporation_status}</p>
+                                    <p className="text-[11px] text-slate-500 font-sans">{st.incorporation_status}</p>
                                   </div>
                                 ) : (
-                                  <span className="text-slate-400">Pending MCA</span>
+                                  <span className="text-slate-500">Pending MCA</span>
                                 )}
                               </td>
-                              <td className="p-4 text-slate-500 text-[11px] font-mono">
+                              <td className="p-4 text-slate-500 text-[12px] font-mono">
                                 {st.created_at ? new Date(st.created_at).toLocaleDateString() : '—'}
                               </td>
                               <td className="p-4 text-right">
@@ -1360,7 +2199,7 @@ export default function AdminDashboard({ user, onLogout }) {
                                   </button>
                                   <button
                                     onClick={() => handleDeleteStartup(st.id, st.startup_name)}
-                                    className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-md transition"
+                                    className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-md transition"
                                     title="Delete Record"
                                   >
                                     <Trash2 className="w-3.5 h-3.5" />
@@ -1465,7 +2304,7 @@ export default function AdminDashboard({ user, onLogout }) {
                           }`}
                         />
                         {formErrors.startup_name && (
-                          <p className="text-rose-600 text-[11px] mt-1 font-medium">{formErrors.startup_name}</p>
+                          <p className="text-rose-600 text-[12px] mt-1 font-medium">{formErrors.startup_name}</p>
                         )}
                       </div>
 
@@ -1483,7 +2322,7 @@ export default function AdminDashboard({ user, onLogout }) {
                           }`}
                         />
                         {formErrors.founder_name && (
-                          <p className="text-rose-600 text-[11px] mt-1 font-medium">{formErrors.founder_name}</p>
+                          <p className="text-rose-600 text-[12px] mt-1 font-medium">{formErrors.founder_name}</p>
                         )}
                       </div>
                     </div>
@@ -1504,7 +2343,7 @@ export default function AdminDashboard({ user, onLogout }) {
                           }`}
                         />
                         {formErrors.founder_phone && (
-                          <p className="text-rose-600 text-[11px] mt-1 font-medium">{formErrors.founder_phone}</p>
+                          <p className="text-rose-600 text-[12px] mt-1 font-medium">{formErrors.founder_phone}</p>
                         )}
                       </div>
 
@@ -1537,7 +2376,7 @@ export default function AdminDashboard({ user, onLogout }) {
                         }`}
                       />
                       {formErrors.company_overview && (
-                        <p className="text-rose-600 text-[11px] mt-1 font-medium">{formErrors.company_overview}</p>
+                        <p className="text-rose-600 text-[12px] mt-1 font-medium">{formErrors.company_overview}</p>
                       )}
                     </div>
 
@@ -1694,7 +2533,7 @@ export default function AdminDashboard({ user, onLogout }) {
                   {/* Search & Filter Bar */}
                   <div className="pt-2 border-t border-slate-100 flex flex-col sm:flex-row gap-3 items-center justify-between">
                     <div className="relative flex-1 w-full">
-                      <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-2.5" />
+                      <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-2.5" />
                       <input
                         type="text"
                         value={docSearch}
@@ -1740,7 +2579,7 @@ export default function AdminDashboard({ user, onLogout }) {
                           <div>
                             <div className="flex items-center space-x-2">
                               <h3 className="font-bold text-slate-900 text-sm">{st.startup_name}</h3>
-                              <span className="text-[10px] font-mono text-slate-500">
+                              <span className="text-[11px] font-mono text-slate-500">
                                 {st.mca_number || 'CIN Pending'}
                               </span>
                             </div>
@@ -1749,7 +2588,7 @@ export default function AdminDashboard({ user, onLogout }) {
                             </p>
                           </div>
                           <span
-                            className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border self-start sm:self-auto ${
+                            className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold border self-start sm:self-auto ${
                               st.status === 'Alumni'
                                 ? 'bg-blue-50 text-blue-700 border-blue-200'
                                 : 'bg-emerald-50 text-emerald-700 border-emerald-200'
@@ -1762,7 +2601,7 @@ export default function AdminDashboard({ user, onLogout }) {
                         {/* Documents Table for this startup */}
                         <div className="overflow-x-auto">
                           <table className="w-full text-left text-xs">
-                            <thead className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">
+                            <thead className="text-[11px] uppercase font-bold text-slate-500 tracking-wider">
                               <tr>
                                 <th className="py-2">Required Document</th>
                                 <th className="py-2">Mandatory</th>
@@ -1778,15 +2617,15 @@ export default function AdminDashboard({ user, onLogout }) {
                                     {doc.document_name}
                                   </td>
                                   <td className="py-2.5">
-                                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                                      doc.mandatory ? 'bg-slate-100 text-slate-700' : 'bg-slate-50 text-slate-400'
+                                    <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${
+                                      doc.mandatory ? 'bg-slate-100 text-slate-700' : 'bg-slate-50 text-slate-500'
                                     }`}>
                                       {doc.mandatory ? 'Mandatory' : 'Optional'}
                                     </span>
                                   </td>
                                   <td className="py-2.5">
                                     <span
-                                      className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
+                                      className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${
                                         doc.status === 'Verified'
                                           ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                                           : doc.status === 'Under Review'
@@ -1797,12 +2636,12 @@ export default function AdminDashboard({ user, onLogout }) {
                                       {doc.status}
                                     </span>
                                   </td>
-                                  <td className="py-2.5 font-mono text-[11px] text-slate-600">
+                                  <td className="py-2.5 font-mono text-[12px] text-slate-600">
                                     {doc.file_name || 'No file uploaded yet'}
                                   </td>
                                   <td className="py-2.5 text-right">
                                     {doc.status === 'Verified' ? (
-                                      <span className="text-emerald-700 font-semibold text-[11px] inline-flex items-center gap-1">
+                                      <span className="text-emerald-700 font-semibold text-[12px] inline-flex items-center gap-1">
                                         <Check className="w-3.5 h-3.5" />
                                         <span>Verified</span>
                                       </span>
@@ -1860,7 +2699,7 @@ export default function AdminDashboard({ user, onLogout }) {
                   {/* Search & Filter */}
                   <div className="pt-2 border-t border-slate-100 flex flex-col sm:flex-row gap-3 items-center justify-between">
                     <div className="relative flex-1 w-full">
-                      <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-2.5" />
+                      <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-2.5" />
                       <input
                         type="text"
                         value={appSearch}
@@ -1909,11 +2748,11 @@ export default function AdminDashboard({ user, onLogout }) {
                             <div>
                               <div className="flex items-center space-x-2">
                                 <h4 className="text-sm font-bold text-slate-900">{app.startup_name}</h4>
-                                <span className="text-[10px] font-mono px-2 py-0.5 bg-slate-100 text-slate-600 rounded">
+                                <span className="text-[11px] font-mono px-2 py-0.5 bg-slate-100 text-slate-600 rounded">
                                   {app.dpiit_number || 'DPIIT Pending'}
                                 </span>
                                 <span
-                                  className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                                  className={`text-[11px] font-bold px-2 py-0.5 rounded-full border ${
                                     app.status === 'Accepted'
                                       ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                                       : app.status === 'Interview Scheduled'
@@ -2014,6 +2853,14 @@ export default function AdminDashboard({ user, onLogout }) {
               <SupportDesk isAdmin={true} currentUser={user} />
             )}
 
+            {/* ================= VIEW: STARTUP PROGRESS MONITORING ================= */}
+            {activeNav === 'progress' && <ProgressMonitoring startups={startups} />}
+
+            {/* ================= VIEW: MONTHLY PROGRESS LOG ================= */}
+            {activeNav === 'monthly' && (
+              <MonthlyProgress startups={startups} reports={monthlyReports} currentUser={user} onChanged={refreshMonthly} />
+            )}
+
           </div>
         </main>
 
@@ -2025,13 +2872,13 @@ export default function AdminDashboard({ user, onLogout }) {
           <div className="relative w-full max-w-2xl bg-white border border-slate-200 rounded-2xl shadow-xl p-6 sm:p-8 my-8 text-slate-900 max-h-[90vh] overflow-y-auto">
             <button
               onClick={() => setEvalModalApp(null)}
-              className="absolute top-5 right-5 p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100 transition"
+              className="absolute top-5 right-5 p-1.5 text-slate-500 hover:text-slate-700 rounded-lg hover:bg-slate-100 transition"
             >
               <X className="w-5 h-5" />
             </button>
 
             <div className="pb-4 border-b border-slate-100 mb-4">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
                 Cohort Admissions Screening
               </span>
               <h3 className="text-lg font-bold text-slate-900 mt-1">
@@ -2044,7 +2891,7 @@ export default function AdminDashboard({ user, onLogout }) {
 
             <div className="space-y-4 text-xs">
               <div>
-                <label className="font-bold text-slate-700 uppercase tracking-wider text-[11px] block mb-1">
+                <label className="font-bold text-slate-700 uppercase tracking-wider text-[12px] block mb-1">
                   Executive Pitch Summary
                 </label>
                 <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl leading-relaxed text-slate-700">
@@ -2097,7 +2944,7 @@ export default function AdminDashboard({ user, onLogout }) {
                 />
               </div>
 
-              <div className="p-3 bg-emerald-50/70 border border-emerald-200 rounded-xl text-emerald-950 text-[11px] leading-relaxed">
+              <div className="p-3 bg-emerald-50/70 border border-emerald-200 rounded-xl text-emerald-950 text-[12px] leading-relaxed">
                 <strong>Cohort Onboarding Automation:</strong> Clicking "Accept into Cohort" will update admissions status to <span className="font-bold">Accepted</span> and automatically induct the startup into the active portfolio with sanctioned grant framework.
               </div>
 
@@ -2142,7 +2989,7 @@ export default function AdminDashboard({ user, onLogout }) {
             
             <button
               onClick={() => setSelectedStartup(null)}
-              className="absolute top-5 right-5 p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100 transition"
+              className="absolute top-5 right-5 p-1.5 text-slate-500 hover:text-slate-700 rounded-lg hover:bg-slate-100 transition"
               aria-label="Close modal"
             >
               <X className="w-5 h-5" />
@@ -2157,7 +3004,7 @@ export default function AdminDashboard({ user, onLogout }) {
                 <div className="flex items-center space-x-2">
                   <h3 className="text-lg font-bold text-slate-900">{selectedStartup.startup_name}</h3>
                   <span
-                    className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
+                    className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${
                       selectedStartup.status === 'Alumni' || selectedStartup.stage === 'Graduated'
                         ? 'bg-blue-50 text-blue-700 border-blue-200'
                         : 'bg-emerald-50 text-emerald-700 border-emerald-200'
@@ -2177,7 +3024,7 @@ export default function AdminDashboard({ user, onLogout }) {
               
               {/* Overview */}
               <div>
-                <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                <label className="text-[12px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
                   Company Overview
                 </label>
                 <p className="text-slate-700 bg-slate-50 p-3.5 rounded-xl border border-slate-200/80 leading-relaxed">
@@ -2188,23 +3035,23 @@ export default function AdminDashboard({ user, onLogout }) {
               {/* 2-Column Info Grid */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="p-3 bg-slate-50 rounded-lg border border-slate-200/80 space-y-1">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase">Founder Details</span>
+                  <span className="text-[11px] font-bold text-slate-500 uppercase">Founder Details</span>
                   <p className="font-bold text-slate-900">{selectedStartup.founder_name}</p>
-                  <p className="text-slate-600 font-mono text-[11px] flex items-center gap-1">
-                    <Phone className="w-3 h-3 text-slate-400" />
+                  <p className="text-slate-600 font-mono text-[12px] flex items-center gap-1">
+                    <Phone className="w-3 h-3 text-slate-500" />
                     <span>{selectedStartup.founder_phone}</span>
                   </p>
-                  <p className="text-slate-600 font-mono text-[11px] flex items-center gap-1">
-                    <Mail className="w-3 h-3 text-slate-400" />
+                  <p className="text-slate-600 font-mono text-[12px] flex items-center gap-1">
+                    <Mail className="w-3 h-3 text-slate-500" />
                     <span>{selectedStartup.founder_email}</span>
                   </p>
                 </div>
 
                 <div className="p-3 bg-slate-50 rounded-lg border border-slate-200/80 space-y-1">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase">Incorporation &amp; MCA</span>
+                  <span className="text-[11px] font-bold text-slate-500 uppercase">Incorporation &amp; MCA</span>
                   <p className="font-bold text-slate-900">{selectedStartup.incorporation_status}</p>
-                  <p className="text-slate-600 font-mono text-[11px]">CIN / MCA: {selectedStartup.mca_number || 'Pending'}</p>
-                  <p className="text-slate-500 text-[11px]">
+                  <p className="text-slate-600 font-mono text-[12px]">CIN / MCA: {selectedStartup.mca_number || 'Pending'}</p>
+                  <p className="text-slate-500 text-[12px]">
                     Incorporation Date: {selectedStartup.incorporation_date || 'Not recorded'}
                   </p>
                 </div>
@@ -2213,22 +3060,22 @@ export default function AdminDashboard({ user, onLogout }) {
               {/* Government Schemes & Lab Details */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="p-3 bg-slate-50 rounded-lg border border-slate-200/80">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">DPIIT Number</span>
+                  <span className="text-[11px] font-bold text-slate-500 uppercase block mb-1">DPIIT Number</span>
                   <span className="font-mono font-bold text-slate-800">{selectedStartup.dpiit_number || '—'}</span>
                 </div>
                 <div className="p-3 bg-slate-50 rounded-lg border border-slate-200/80">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Grant Sanctioned</span>
+                  <span className="text-[11px] font-bold text-slate-500 uppercase block mb-1">Grant Sanctioned</span>
                   <span className="font-bold text-emerald-700">₹{(Number(selectedStartup.sanctioned_grant) / 100000).toFixed(1)} Lakh</span>
                 </div>
                 <div className="p-3 bg-slate-50 rounded-lg border border-slate-200/80">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Incubation Cohort</span>
+                  <span className="text-[11px] font-bold text-slate-500 uppercase block mb-1">Incubation Cohort</span>
                   <span className="font-bold text-slate-800">{selectedStartup.cohort}</span>
                 </div>
               </div>
 
               {/* Compliance Documents Checklist for this startup */}
               <div className="pt-2">
-                <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-2">
+                <label className="text-[12px] font-bold text-slate-500 uppercase tracking-wider block mb-2">
                   Compliance Documents Status
                 </label>
                 <div className="space-y-1.5">
@@ -2236,10 +3083,10 @@ export default function AdminDashboard({ user, onLogout }) {
                     <div key={doc.id} className="p-2.5 rounded-lg bg-slate-50 border border-slate-200/80 flex items-center justify-between text-xs">
                       <div>
                         <p className="font-medium text-slate-900">{doc.document_name}</p>
-                        <p className="text-[10px] text-slate-500 font-mono">{doc.file_name || 'No file uploaded'}</p>
+                        <p className="text-[11px] text-slate-500 font-mono">{doc.file_name || 'No file uploaded'}</p>
                       </div>
                       <span
-                        className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                        className={`px-2 py-0.5 rounded-full text-[11px] font-bold border ${
                           doc.status === 'Verified'
                             ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                             : doc.status === 'Under Review'
@@ -2293,12 +3140,12 @@ export default function AdminDashboard({ user, onLogout }) {
                 </div>
                 <div>
                   <h3 className="text-sm font-bold text-slate-900">Add Authorized Administrator</h3>
-                  <p className="text-[11px] text-slate-500">Restricted to Incubation Directorate</p>
+                  <p className="text-[12px] text-slate-500">Restricted to Incubation Directorate</p>
                 </div>
               </div>
               <button
                 onClick={() => { setAddAdminOpen(false); setAddAdminError(''); setAddAdminSuccess(''); }}
-                className="p-1 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+                className="p-1 rounded-md text-slate-500 hover:text-slate-600 hover:bg-slate-100"
               >
                 <X className="w-4 h-4" />
               </button>

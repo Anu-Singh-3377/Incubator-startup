@@ -42,41 +42,41 @@ export default function ForgotPasswordModal({ isOpen, onClose }) {
           </div>
           <div>
             <h3 className="text-base font-bold text-slate-900">Reset Portal Password</h3>
-            <p className="text-xs text-slate-500">VentureBharat Security Gateway</p>
+            <p className="text-[0.75rem]/4 text-slate-500">VentureBharat Security Gateway</p>
           </div>
         </div>
 
         {message ? (
           <div className="space-y-4">
-            <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl flex items-start space-x-2.5 text-xs text-emerald-800">
+            <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl flex items-start space-x-2.5 text-[0.75rem]/4 text-emerald-800">
               <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
               <span>{message}</span>
             </div>
-            <p className="text-xs text-slate-500 leading-relaxed">
+            <p className="text-[0.75rem]/4 text-slate-500 leading-relaxed">
               If an account with <strong className="text-slate-800">{email}</strong> exists, a one-time reset link has been dispatched. Check your spam folder if not received in 2 minutes.
             </p>
             <button
               onClick={onClose}
-              className="w-full py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-semibold transition"
+              className="w-full py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-[0.75rem]/4 font-semibold transition"
             >
               Return to Login
             </button>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
-            <p className="text-xs text-slate-500">
+            <p className="text-[0.75rem]/4 text-slate-500">
               Enter the official email associated with your startup, mentorship profile, or administrator role.
             </p>
 
             {error && (
-              <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-xl flex items-start space-x-2 text-xs text-rose-800">
+              <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-xl flex items-start space-x-2 text-[0.75rem]/4 text-rose-800">
                 <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
                 <span>{error}</span>
               </div>
             )}
 
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
+              <label className="block text-[0.75rem]/4 font-semibold text-slate-700 mb-1">
                 Official Email
               </label>
               <div className="relative">
@@ -87,7 +87,7 @@ export default function ForgotPasswordModal({ isOpen, onClose }) {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="e.g. founder@startup.in"
-                  className="w-full pl-9 pr-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-600/20 focus:border-emerald-600"
+                  className="w-full pl-9 pr-3 py-2.5 bg-white border border-slate-200 rounded-xl text-[0.875rem]/5 text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-600/20 focus:border-emerald-600"
                 />
               </div>
             </div>
@@ -95,7 +95,7 @@ export default function ForgotPasswordModal({ isOpen, onClose }) {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-semibold flex items-center justify-center space-x-1.5 transition disabled:opacity-50"
+              className="w-full py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-[0.75rem]/4 font-semibold flex items-center justify-center space-x-1.5 transition disabled:opacity-50"
             >
               {loading ? (
                 <>

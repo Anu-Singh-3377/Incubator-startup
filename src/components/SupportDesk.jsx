@@ -70,10 +70,23 @@ export default function SupportDesk({ isAdmin = false, currentUser }) {
   const [selectedCallback, setSelectedCallback] = useState(null);
   const [adminCallbackNote, setAdminCallbackNote] = useState('');
 
-  const loadData = async () => {
-    setLoading(true);
+  // Request workflow (admin): active queue vs completed archive, completion message, feedback toast
+  const [adminView, setAdminView] = useState('active'); // 'active' | 'completed'
+  const [workflowAction, setWorkflowAction] = useState(null); // null | 'complete' | 'reject'
+  const [workflowNote, setWorkflowNote] = useState('');
+  const [workflowBusy, setWorkflowBusy] = useState(false);
+  const [toast, setToast] = useState(null);
+
+  const showToast = (message, tone = 'success') => {
+    setToast({ message, tone });
+    setTimeout(() => setToast(null), 3500);
+  };
+
+  const loadData = async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
-      const startupId = !isAdmin ? currentUser?.id || currentUser?.startup_name : null;
+      // Tickets are stored against the startups.id row, so prefer it over the auth profile id
+      const startupId = !isAdmin ? currentUser?.startup_id || currentUser?.id || currentUser?.startup_name : null;
       const [tktData, cbData] = await Promise.all([
         supabaseService.getSupportTickets(startupId),
         supabaseService.getCallbackRequests(startupId)
@@ -97,6 +110,14 @@ export default function SupportDesk({ isAdmin = false, currentUser }) {
     loadData();
   }, [isAdmin, currentUser]);
 
+  // Keep both sides in sync: refresh quietly every 30s while the desk is open
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (typeof document === 'undefined' || document.visibilityState === 'visible') loadData(true);
+    }, 30000);
+    return () => clearInterval(timer);
+  }, [isAdmin, currentUser, selectedTicket?.id]);
+
   // Handle Raise Ticket
   const handleRaiseTicket = async (e) => {
     e.preventDefault();
@@ -114,7 +135,7 @@ export default function SupportDesk({ isAdmin = false, currentUser }) {
     setTicketErrors({});
     try {
       const res = await supabaseService.createSupportTicket({
-        startup_id: currentUser?.id || 'st_01',
+        startup_id: currentUser?.startup_id || currentUser?.id || 'st_01',
         startup_name: currentUser?.startup_name || 'KisanSetu DeepTech Labs',
         founder_name: currentUser?.full_name || 'Aarav Sharma',
         founder_email: currentUser?.email || 'founder@venturebharat.in',
@@ -145,7 +166,7 @@ export default function SupportDesk({ isAdmin = false, currentUser }) {
     setSubmittingCallback(true);
     try {
       const res = await supabaseService.createCallbackRequest({
-        startup_id: currentUser?.id || 'st_01',
+        startup_id: currentUser?.startup_id || currentUser?.id || 'st_01',
         startup_name: currentUser?.startup_name || 'KisanSetu DeepTech Labs',
         founder_name: currentUser?.full_name || 'Aarav Sharma',
         phone: newCallback.phone,
@@ -170,9 +191,13 @@ export default function SupportDesk({ isAdmin = false, currentUser }) {
     if (!ticketReplyText.trim() || !selectedTicket) return;
     setSubmittingReply(true);
     try {
+      const author = currentUser?.full_name || (isAdmin ? 'Directorate Support Desk' : 'Founder');
+      const role = isAdmin ? 'Incubation Directorate' : 'Startup Founder';
       await supabaseService.addTicketResponse(selectedTicket.id, {
-        author_name: currentUser?.full_name || (isAdmin ? 'Directorate Support Desk' : 'Founder'),
-        author_role: isAdmin ? 'Incubation Directorate' : 'Startup Founder',
+        author_name: author,
+        responder_name: author,
+        author_role: role,
+        responder_role: role,
         message: ticketReplyText.trim(),
         is_internal: isAdmin ? isInternalReply : false
       });
@@ -204,14 +229,167 @@ export default function SupportDesk({ isAdmin = false, currentUser }) {
       await supabaseService.updateCallbackStatus(cbId, newStatus, adminCallbackNote);
       setSelectedCallback(null);
       setAdminCallbackNote('');
-      await loadData();
+      if (newStatus === 'Completed') showToast('Callback completed and removed from the active queue.');
+      else if (newStatus === 'Scheduled') showToast('Callback verified and scheduled. The founder can see your message.');
+      await loadData(true);
     } catch (err) {
       alert('Error updating callback: ' + err.message);
     }
   };
 
+  // ================= REQUEST WORKFLOW: verify -> respond -> complete -> archive =================
+  const isTicketDone = (t) => t.status === 'Resolved' || t.status === 'Closed';
+  const isAdminReply = (r) => {
+    const role = r.author_role || r.responder_role || '';
+    return role === 'admin' || role.includes('Directorate');
+  };
+  const adminName = currentUser?.full_name || 'Directorate Support Desk';
+
+  const postAdminMessage = (ticketId, message) =>
+    supabaseService.addTicketResponse(ticketId, {
+      author_name: adminName,
+      responder_name: adminName,
+      author_role: 'Incubation Directorate',
+      responder_role: 'Incubation Directorate',
+      message,
+      is_internal: false
+    });
+
+  const closeWorkflowBox = () => {
+    setWorkflowAction(null);
+    setWorkflowNote('');
+  };
+
+  const handleVerifyTicket = async () => {
+    if (!selectedTicket) return;
+    setWorkflowBusy(true);
+    try {
+      await supabaseService.updateTicketStatus(selectedTicket.id, 'In Progress');
+      await postAdminMessage(
+        selectedTicket.id,
+        'Your request has been verified by the incubation team and is now being worked on. We will update you on this thread.'
+      );
+      showToast(`${selectedTicket.ticket_number} verified. The founder has been notified.`);
+      await loadData(true);
+    } catch (err) {
+      showToast('Could not verify request: ' + err.message, 'error');
+    } finally {
+      setWorkflowBusy(false);
+    }
+  };
+
+  // Complete (Resolved) or reject (Closed): both send a final message, then leave the admin's active queue
+  const handleFinishTicket = async (e) => {
+    e.preventDefault();
+    if (!selectedTicket || !workflowNote.trim()) return;
+    const finalStatus = workflowAction === 'reject' ? 'Closed' : 'Resolved';
+    setWorkflowBusy(true);
+    try {
+      await postAdminMessage(selectedTicket.id, workflowNote.trim());
+      await supabaseService.updateTicketStatus(selectedTicket.id, finalStatus);
+      showToast(
+        finalStatus === 'Resolved'
+          ? `${selectedTicket.ticket_number} completed and removed from the active queue.`
+          : `${selectedTicket.ticket_number} closed and removed from the active queue.`
+      );
+      closeWorkflowBox();
+      setSelectedTicket(null);
+      await loadData(true);
+    } catch (err) {
+      showToast('Could not update request: ' + err.message, 'error');
+    } finally {
+      setWorkflowBusy(false);
+    }
+  };
+
+  const handleReopenTicket = async (tkt) => {
+    try {
+      await supabaseService.updateTicketStatus(tkt.id, 'In Progress');
+      showToast(`${tkt.ticket_number} reopened and moved back to the active queue.`);
+      await loadData(true);
+    } catch (err) {
+      showToast('Could not reopen request: ' + err.message, 'error');
+    }
+  };
+
+  const handleDeleteTicket = async (tkt) => {
+    if (!window.confirm(`Permanently delete ${tkt.ticket_number} and its conversation? This cannot be undone.`)) return;
+    try {
+      await supabaseService.deleteSupportTicket(tkt.id);
+      if (selectedTicket?.id === tkt.id) setSelectedTicket(null);
+      showToast(`${tkt.ticket_number} deleted.`);
+      await loadData(true);
+    } catch (err) {
+      showToast('Could not delete request: ' + err.message, 'error');
+    }
+  };
+
+  const handleDeleteCallback = async (cb) => {
+    if (!window.confirm(`Permanently delete callback ${cb.reference_number}? This cannot be undone.`)) return;
+    try {
+      await supabaseService.deleteCallbackRequest(cb.id);
+      if (selectedCallback?.id === cb.id) setSelectedCallback(null);
+      showToast(`${cb.reference_number} deleted.`);
+      await loadData(true);
+    } catch (err) {
+      showToast('Could not delete callback: ' + err.message, 'error');
+    }
+  };
+
+  // Founder side: highlight tickets with an incubator reply the founder has not opened yet
+  const seenKey = (id) => `vb_ticket_seen_${id}`;
+  const visibleReplies = (t) => (t.responses || []).filter((r) => !r.is_internal);
+  const hasUnreadReply = (t) => {
+    const replies = visibleReplies(t);
+    const last = replies[replies.length - 1];
+    if (!last || !isAdminReply(last)) return false;
+    try {
+      return localStorage.getItem(seenKey(t.id)) !== String(replies.length);
+    } catch {
+      return false;
+    }
+  };
+  const openTicket = (tkt) => {
+    if (!isAdmin) {
+      try {
+        localStorage.setItem(seenKey(tkt.id), String(visibleReplies(tkt).length));
+      } catch {
+        /* storage unavailable: badge simply stays */
+      }
+    }
+    closeWorkflowBox();
+    setSelectedTicket(tkt);
+  };
+
+  // Progress tracker shown to both sides inside the thread
+  const ticketStage = (t) => {
+    if (t.status === 'Resolved' || t.status === 'Closed') return 3;
+    if (t.status === 'In Progress' || t.status === 'Under Review') return visibleReplies(t).some(isAdminReply) ? 2 : 1;
+    return 0;
+  };
+  const TICKET_STAGES = ['Submitted', 'Verified', 'In progress', 'Completed'];
+
+  const activeTickets = tickets.filter((t) => !isTicketDone(t));
+  const completedTickets = tickets.filter(isTicketDone);
+  const activeCallbacks = callbacks.filter((c) => c.status !== 'Completed');
+  const completedCallbacks = callbacks.filter((c) => c.status === 'Completed');
+  const unreadCount = tickets.filter(hasUnreadReply).length;
+
+  // Admin works from the active queue; completed requests move to the archive view
+  const baseTickets = isAdmin ? (adminView === 'active' ? activeTickets : completedTickets) : tickets;
+  const baseCallbacks = isAdmin ? (adminView === 'active' ? activeCallbacks : completedCallbacks) : callbacks;
+
+  // Ticket status colours for the summary bar (status palette, always shown with a text label)
+  const TICKET_STATUS_META = [
+    { key: 'Open', color: '#d97706' },
+    { key: 'In Progress', color: '#2563eb' },
+    { key: 'Under Review', color: '#7c3aed' },
+    { key: 'Resolved', color: '#059669' },
+    { key: 'Closed', color: '#94a3b8' }
+  ];
+
   // Filtered Tickets
-  const filteredTickets = tickets.filter((tkt) => {
+  const filteredTickets = baseTickets.filter((tkt) => {
     const term = searchTerm.toLowerCase();
     const matchSearch =
       tkt.ticket_number?.toLowerCase().includes(term) ||
@@ -255,12 +433,12 @@ export default function SupportDesk({ isAdmin = false, currentUser }) {
       </div>
 
       {/* Tabs */}
-      <div className="flex items-center space-x-2 border-b border-slate-200">
+      <div className="flex items-center space-x-2 border-b border-slate-200 overflow-x-auto">
         {!isAdmin ? (
           <>
             <button
               onClick={() => { setActiveTab('my-tickets'); setTicketSuccess(null); }}
-              className={`flex items-center space-x-2 px-4 py-2.5 text-xs font-bold border-b-2 transition ${
+              className={`flex items-center space-x-2 px-4 py-2.5 text-xs font-bold border-b-2 transition shrink-0 whitespace-nowrap ${
                 activeTab === 'my-tickets'
                   ? 'border-emerald-600 text-emerald-800'
                   : 'border-transparent text-slate-500 hover:text-slate-800'
@@ -268,11 +446,16 @@ export default function SupportDesk({ isAdmin = false, currentUser }) {
             >
               <MessageSquare className="w-4 h-4" />
               <span>My Support Tickets ({tickets.length})</span>
+              {unreadCount > 0 && (
+                <span className="px-1.5 py-0.5 rounded-full bg-emerald-600 text-white text-[11px] font-black" title="Tickets with a new reply from the incubator">
+                  {unreadCount} new
+                </span>
+              )}
             </button>
 
             <button
               onClick={() => { setActiveTab('raise-ticket'); setTicketSuccess(null); }}
-              className={`flex items-center space-x-2 px-4 py-2.5 text-xs font-bold border-b-2 transition ${
+              className={`flex items-center space-x-2 px-4 py-2.5 text-xs font-bold border-b-2 transition shrink-0 whitespace-nowrap ${
                 activeTab === 'raise-ticket'
                   ? 'border-emerald-600 text-emerald-800'
                   : 'border-transparent text-slate-500 hover:text-slate-800'
@@ -284,7 +467,7 @@ export default function SupportDesk({ isAdmin = false, currentUser }) {
 
             <button
               onClick={() => { setActiveTab('request-callback'); setCallbackSuccess(null); }}
-              className={`flex items-center space-x-2 px-4 py-2.5 text-xs font-bold border-b-2 transition ${
+              className={`flex items-center space-x-2 px-4 py-2.5 text-xs font-bold border-b-2 transition shrink-0 whitespace-nowrap ${
                 activeTab === 'request-callback'
                   ? 'border-emerald-600 text-emerald-800'
                   : 'border-transparent text-slate-500 hover:text-slate-800'
@@ -297,39 +480,124 @@ export default function SupportDesk({ isAdmin = false, currentUser }) {
         ) : (
           <>
             <button
-              onClick={() => setActiveTab('tickets-admin')}
-              className={`flex items-center space-x-2 px-4 py-2.5 text-xs font-bold border-b-2 transition ${
+              onClick={() => { setActiveTab('tickets-admin'); setStatusFilter('All'); }}
+              className={`flex items-center space-x-2 px-4 py-2.5 text-xs font-bold border-b-2 transition shrink-0 whitespace-nowrap ${
                 activeTab === 'tickets-admin'
                   ? 'border-emerald-600 text-emerald-800'
                   : 'border-transparent text-slate-500 hover:text-slate-800'
               }`}
             >
               <MessageSquare className="w-4 h-4" />
-              <span>All Active Support Tickets ({tickets.length})</span>
+              <span>All Active Support Tickets ({activeTickets.length})</span>
             </button>
 
             <button
-              onClick={() => setActiveTab('callbacks-admin')}
-              className={`flex items-center space-x-2 px-4 py-2.5 text-xs font-bold border-b-2 transition ${
+              onClick={() => { setActiveTab('callbacks-admin'); setStatusFilter('All'); }}
+              className={`flex items-center space-x-2 px-4 py-2.5 text-xs font-bold border-b-2 transition shrink-0 whitespace-nowrap ${
                 activeTab === 'callbacks-admin'
                   ? 'border-emerald-600 text-emerald-800'
                   : 'border-transparent text-slate-500 hover:text-slate-800'
               }`}
             >
               <PhoneCall className="w-4 h-4" />
-              <span>Callback Request Queue ({callbacks.length})</span>
+              <span>Callback Request Queue ({activeCallbacks.length})</span>
             </button>
           </>
         )}
       </div>
 
+      {/* Admin: active work queue vs completed archive */}
+      {isAdmin && (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div className="inline-flex items-center p-1 bg-slate-100 rounded-xl text-xs font-bold self-start" role="group" aria-label="Request queue view">
+            <button
+              onClick={() => { setAdminView('active'); setStatusFilter('All'); }}
+              aria-pressed={adminView === 'active'}
+              className={`px-3 py-1.5 rounded-lg transition ${adminView === 'active' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'}`}
+            >
+              Active queue ({activeTab === 'callbacks-admin' ? activeCallbacks.length : activeTickets.length})
+            </button>
+            <button
+              onClick={() => { setAdminView('completed'); setStatusFilter('All'); }}
+              aria-pressed={adminView === 'completed'}
+              className={`px-3 py-1.5 rounded-lg transition ${adminView === 'completed' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'}`}
+            >
+              Completed ({activeTab === 'callbacks-admin' ? completedCallbacks.length : completedTickets.length})
+            </button>
+          </div>
+          <p className="text-[12px] text-slate-500">
+            {adminView === 'active'
+              ? 'Completed requests leave this queue automatically. Updates refresh every 30 seconds.'
+              : 'Founders keep their copy of the conversation. Delete removes a request permanently.'}
+          </p>
+        </div>
+      )}
+
       {/* ================= TAB 1: TICKETS LIST (STARTUP OR ADMIN) ================= */}
       {(activeTab === 'my-tickets' || activeTab === 'tickets-admin') && (
         <div className="space-y-4">
+          {/* Ticket status summary: click a status to filter the list below */}
+          {baseTickets.length > 0 && (
+            <div className="p-4 bg-white border border-slate-200/90 rounded-xl shadow-xs">
+              <div className="flex items-center justify-between mb-2.5">
+                <p className="text-xs font-bold text-slate-900">Ticket status overview</p>
+                {statusFilter !== 'All' && (
+                  <button
+                    onClick={() => setStatusFilter('All')}
+                    className="text-[12px] font-semibold text-emerald-700 hover:text-emerald-800"
+                  >
+                    Clear filter
+                  </button>
+                )}
+              </div>
+              <div className="flex h-2.5 w-full gap-[2px] rounded-full overflow-hidden bg-slate-100" role="img" aria-label="Ticket status distribution">
+                {TICKET_STATUS_META.map((st) => {
+                  const count = baseTickets.filter((t) => t.status === st.key).length;
+                  return count > 0 ? (
+                    <div
+                      key={st.key}
+                      className="h-full transition-all duration-300"
+                      style={{
+                        width: `${(count / baseTickets.length) * 100}%`,
+                        background: st.color,
+                        opacity: statusFilter === 'All' || statusFilter === st.key ? 1 : 0.3
+                      }}
+                    />
+                  ) : null;
+                })}
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 mt-3">
+                {TICKET_STATUS_META.map((st) => {
+                  const count = baseTickets.filter((t) => t.status === st.key).length;
+                  const selected = statusFilter === st.key;
+                  return (
+                    <button
+                      key={st.key}
+                      onClick={() => setStatusFilter(selected ? 'All' : st.key)}
+                      aria-pressed={selected}
+                      title={`Show ${st.key} tickets`}
+                      className={`flex items-center justify-between gap-2 px-3 py-2 rounded-lg border text-xs transition ${
+                        selected
+                          ? 'border-emerald-500 bg-emerald-50 ring-2 ring-emerald-500/15'
+                          : 'border-slate-200 bg-slate-50 hover:bg-white hover:border-slate-300'
+                      }`}
+                    >
+                      <span className="flex items-center gap-2 text-slate-600">
+                        <span className="w-2.5 h-2.5 rounded-sm" style={{ background: st.color }} />
+                        {st.key}
+                      </span>
+                      <strong className="text-slate-900 tabular-nums">{count}</strong>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Filters Bar */}
           <div className="p-4 rounded-xl bg-white border border-slate-200/90 shadow-xs flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
             <div className="relative flex-1">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
                 value={searchTerm}
@@ -370,7 +638,7 @@ export default function SupportDesk({ isAdmin = false, currentUser }) {
           <div className="bg-white rounded-xl border border-slate-200/90 shadow-xs overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
-                <thead className="bg-slate-50/70 border-b border-slate-200 text-slate-500 font-semibold uppercase tracking-wider text-[10px]">
+                <thead className="bg-slate-50/70 border-b border-slate-200 text-slate-500 font-semibold uppercase tracking-wider text-[11px]">
                   <tr>
                     <th className="py-3 px-4">Ticket ID</th>
                     <th className="py-3 px-4">Subject</th>
@@ -384,8 +652,12 @@ export default function SupportDesk({ isAdmin = false, currentUser }) {
                 <tbody className="divide-y divide-slate-100">
                   {filteredTickets.length === 0 ? (
                     <tr>
-                      <td colSpan={isAdmin ? 7 : 6} className="py-8 text-center text-slate-400">
-                        No support tickets found matching criteria.
+                      <td colSpan={isAdmin ? 7 : 6} className="py-8 text-center text-slate-500">
+                        {isAdmin && adminView === 'active' && activeTickets.length === 0
+                          ? 'All caught up. There are no open requests. Completed requests are in the Completed view.'
+                          : isAdmin && adminView === 'completed' && completedTickets.length === 0
+                          ? 'No completed requests yet.'
+                          : 'No support tickets found matching criteria.'}
                       </td>
                     </tr>
                   ) : (
@@ -395,7 +667,13 @@ export default function SupportDesk({ isAdmin = false, currentUser }) {
                           {tkt.ticket_number}
                         </td>
                         <td className="py-3 px-4 font-bold text-slate-900 max-w-xs truncate">
+                          {!isAdmin && hasUnreadReply(tkt) && (
+                            <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 mr-1.5 align-middle" aria-label="New reply" />
+                          )}
                           {tkt.subject}
+                          {!isAdmin && hasUnreadReply(tkt) && (
+                            <span className="ml-1.5 text-[11px] font-bold text-emerald-700">New reply</span>
+                          )}
                         </td>
                         <td className="py-3 px-4 text-slate-600">
                           {tkt.category}
@@ -403,12 +681,12 @@ export default function SupportDesk({ isAdmin = false, currentUser }) {
                         {isAdmin && (
                           <td className="py-3 px-4">
                             <span className="font-semibold text-slate-800 block">{tkt.startup_name}</span>
-                            <span className="text-[11px] text-slate-500">{tkt.founder_name}</span>
+                            <span className="text-[12px] text-slate-500">{tkt.founder_name}</span>
                           </td>
                         )}
                         <td className="py-3 px-4">
                           <span
-                            className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                            className={`px-2 py-0.5 rounded text-[11px] font-bold ${
                               tkt.priority === 'Urgent'
                                 ? 'bg-rose-50 text-rose-700 border border-rose-200'
                                 : tkt.priority === 'High'
@@ -421,7 +699,7 @@ export default function SupportDesk({ isAdmin = false, currentUser }) {
                         </td>
                         <td className="py-3 px-4">
                           <span
-                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                            className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
                               tkt.status === 'Resolved' || tkt.status === 'Closed'
                                 ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                                 : tkt.status === 'In Progress'
@@ -434,11 +712,29 @@ export default function SupportDesk({ isAdmin = false, currentUser }) {
                         </td>
                         <td className="py-3 px-4 text-right">
                           <button
-                            onClick={() => setSelectedTicket(tkt)}
+                            onClick={() => openTicket(tkt)}
                             className="px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold text-xs transition"
                           >
-                            Open Thread &rarr;
+                            {isAdmin && tkt.status === 'Open' ? 'Review & Verify' : 'Open Thread'} &rarr;
                           </button>
+                          {isAdmin && adminView === 'completed' && (
+                            <div className="inline-flex items-center gap-1.5 ml-1.5">
+                              <button
+                                onClick={() => handleReopenTicket(tkt)}
+                                className="px-2.5 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold text-xs"
+                                title="Move back to the active queue"
+                              >
+                                Reopen
+                              </button>
+                              <button
+                                onClick={() => handleDeleteTicket(tkt)}
+                                className="px-2.5 py-1.5 rounded-lg border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs"
+                                title="Permanently delete this request"
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          )}
                         </td>
                       </tr>
                     ))
@@ -493,7 +789,7 @@ export default function SupportDesk({ isAdmin = false, currentUser }) {
                   className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-xs"
                 />
                 {ticketErrors.subject && (
-                  <p className="text-rose-500 text-[10px] mt-1">{ticketErrors.subject}</p>
+                  <p className="text-rose-500 text-[11px] mt-1">{ticketErrors.subject}</p>
                 )}
               </div>
 
@@ -540,7 +836,7 @@ export default function SupportDesk({ isAdmin = false, currentUser }) {
                   className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-xs"
                 />
                 {ticketErrors.description && (
-                  <p className="text-rose-500 text-[10px] mt-1">{ticketErrors.description}</p>
+                  <p className="text-rose-500 text-[11px] mt-1">{ticketErrors.description}</p>
                 )}
               </div>
 
@@ -683,18 +979,23 @@ export default function SupportDesk({ isAdmin = false, currentUser }) {
               </h4>
               <div className="divide-y divide-slate-100 text-xs">
                 {callbacks.map((cb) => (
-                  <div key={cb.id} className="py-3 flex items-center justify-between">
+                  <div key={cb.id} className="py-3 flex items-start justify-between gap-3">
                     <div>
                       <div className="flex items-center space-x-2">
                         <span className="font-mono font-bold text-slate-800">{cb.reference_number}</span>
                         <span className="font-semibold text-slate-900">{cb.reason}</span>
                       </div>
-                      <p className="text-[11px] text-slate-500 mt-0.5">
+                      <p className="text-[12px] text-slate-500 mt-0.5">
                         {cb.preferred_date} • {cb.preferred_time_window} • Phone: {cb.phone}
                       </p>
+                      {cb.admin_notes && (
+                        <p className="mt-1.5 p-2 rounded-lg bg-emerald-50 border border-emerald-100 text-[12px] text-emerald-900">
+                          <strong>Incubator response:</strong> {cb.admin_notes}
+                        </p>
+                      )}
                     </div>
                     <span
-                      className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                      className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
                         cb.status === 'Completed'
                           ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                           : 'bg-amber-50 text-amber-700 border border-amber-200'
@@ -726,7 +1027,7 @@ export default function SupportDesk({ isAdmin = false, currentUser }) {
 
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
-              <thead className="bg-slate-50/70 border-b border-slate-200 text-slate-500 font-semibold uppercase tracking-wider text-[10px]">
+              <thead className="bg-slate-50/70 border-b border-slate-200 text-slate-500 font-semibold uppercase tracking-wider text-[11px]">
                 <tr>
                   <th className="py-3 px-4">Ref Number</th>
                   <th className="py-3 px-4">Startup / Founder</th>
@@ -738,35 +1039,35 @@ export default function SupportDesk({ isAdmin = false, currentUser }) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {callbacks.length === 0 ? (
+                {baseCallbacks.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="py-8 text-center text-slate-400">
-                      No callback requests in the queue.
+                    <td colSpan={7} className="py-8 text-center text-slate-500">
+                      {adminView === 'active' ? 'No callback requests in the queue.' : 'No completed callbacks yet.'}
                     </td>
                   </tr>
                 ) : (
-                  callbacks.map((cb) => (
+                  baseCallbacks.map((cb) => (
                     <tr key={cb.id} className="hover:bg-slate-50/50">
                       <td className="py-3 px-4 font-mono font-bold text-slate-800">
                         {cb.reference_number}
                       </td>
                       <td className="py-3 px-4">
                         <span className="font-bold text-slate-900 block">{cb.startup_name}</span>
-                        <span className="text-[11px] text-slate-500">{cb.founder_name}</span>
+                        <span className="text-[12px] text-slate-500">{cb.founder_name}</span>
                       </td>
                       <td className="py-3 px-4 font-mono text-slate-700">
                         {cb.phone}
                       </td>
                       <td className="py-3 px-4 text-slate-600">
                         <span className="font-semibold block">{cb.preferred_date}</span>
-                        <span className="text-[10px] text-slate-400">{cb.preferred_time_window}</span>
+                        <span className="text-[11px] text-slate-500">{cb.preferred_time_window}</span>
                       </td>
                       <td className="py-3 px-4 text-slate-800 max-w-xs truncate">
                         {cb.reason}
                       </td>
                       <td className="py-3 px-4">
                         <span
-                          className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                          className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
                             cb.status === 'Completed'
                               ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                               : cb.status === 'Scheduled'
@@ -782,17 +1083,26 @@ export default function SupportDesk({ isAdmin = false, currentUser }) {
                           {cb.status !== 'Completed' && (
                             <button
                               onClick={() => handleUpdateCallback(cb.id, 'Completed')}
-                              className="px-2.5 py-1 rounded bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px]"
+                              className="px-2.5 py-1 rounded bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[12px]"
                             >
                               Mark Done
                             </button>
                           )}
                           <button
-                            onClick={() => setSelectedCallback(cb)}
-                            className="px-2.5 py-1 rounded border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold text-[11px]"
+                            onClick={() => { setSelectedCallback(cb); setAdminCallbackNote(cb.admin_notes || ''); }}
+                            className="px-2.5 py-1 rounded border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold text-[12px]"
                           >
-                            Details
+                            {cb.status === 'Requested' ? 'Verify & reply' : 'Details'}
                           </button>
+                          {cb.status === 'Completed' && (
+                            <button
+                              onClick={() => handleDeleteCallback(cb)}
+                              className="px-2.5 py-1 rounded border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-[12px]"
+                              title="Permanently delete this callback"
+                            >
+                              Delete
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -815,7 +1125,7 @@ export default function SupportDesk({ isAdmin = false, currentUser }) {
                   <span className="font-mono font-bold text-xs text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
                     {selectedTicket.ticket_number}
                   </span>
-                  <span className="text-[10px] uppercase font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
+                  <span className="text-[11px] uppercase font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
                     {selectedTicket.category}
                   </span>
                 </div>
@@ -843,12 +1153,146 @@ export default function SupportDesk({ isAdmin = false, currentUser }) {
                 )}
                 <button
                   onClick={() => setSelectedTicket(null)}
-                  className="p-1 rounded text-slate-400 hover:text-slate-700"
+                  className="p-1 rounded text-slate-500 hover:text-slate-700"
                 >
                   <X className="w-4 h-4" />
                 </button>
               </div>
             </div>
+
+            {/* Request progress tracker (both sides) */}
+            <ol className="grid grid-cols-4 gap-1.5 pt-3 shrink-0" aria-label="Request progress">
+              {TICKET_STAGES.map((label, i) => {
+                const stage = ticketStage(selectedTicket);
+                const rejected = selectedTicket.status === 'Closed' && i === 3;
+                const reached = i <= stage;
+                return (
+                  <li key={label} className="min-w-0" aria-current={i === stage ? 'step' : undefined}>
+                    <div className={`h-1.5 rounded-full ${reached ? (rejected ? 'bg-slate-400' : 'bg-emerald-500') : 'bg-slate-200'}`} />
+                    <p className={`mt-1 text-[11px] font-semibold truncate ${reached ? 'text-slate-800' : 'text-slate-500'}`}>
+                      {rejected ? 'Closed' : label}
+                    </p>
+                  </li>
+                );
+              })}
+            </ol>
+
+            {/* Admin workflow actions */}
+            {isAdmin && (
+              <div className="mt-3 p-3 rounded-xl bg-slate-50 border border-slate-200 shrink-0 space-y-2.5">
+                {!workflowAction ? (
+                  <div className="flex flex-wrap items-center gap-2">
+                    {selectedTicket.status === 'Open' && (
+                      <button
+                        onClick={handleVerifyTicket}
+                        disabled={workflowBusy}
+                        className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center gap-1.5 disabled:opacity-50"
+                        title="Confirm this is a valid request and notify the founder"
+                      >
+                        <Shield className="w-3.5 h-3.5" />
+                        {workflowBusy ? 'Verifying...' : 'Verify & accept'}
+                      </button>
+                    )}
+                    {!isTicketDone(selectedTicket) && (
+                      <>
+                        <button
+                          onClick={() => setWorkflowAction('complete')}
+                          disabled={workflowBusy}
+                          className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1.5 disabled:opacity-50"
+                        >
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          Mark completed
+                        </button>
+                        <button
+                          onClick={() => setWorkflowAction('reject')}
+                          disabled={workflowBusy}
+                          className="px-3 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 font-semibold text-xs flex items-center gap-1.5 disabled:opacity-50"
+                          title="Close a request that is invalid or a duplicate"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                          Reject
+                        </button>
+                      </>
+                    )}
+                    {isTicketDone(selectedTicket) && (
+                      <>
+                        <span className="text-xs text-slate-600 flex items-center gap-1.5">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                          This request is {selectedTicket.status.toLowerCase()} and is in the Completed archive.
+                        </span>
+                        <button
+                          onClick={() => handleReopenTicket(selectedTicket)}
+                          className="px-3 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 font-semibold text-xs"
+                        >
+                          Reopen
+                        </button>
+                        <button
+                          onClick={() => handleDeleteTicket(selectedTicket)}
+                          className="px-3 py-1.5 rounded-lg border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs"
+                        >
+                          Delete permanently
+                        </button>
+                      </>
+                    )}
+                  </div>
+                ) : (
+                  <form onSubmit={handleFinishTicket} className="space-y-2">
+                    <label htmlFor="workflow-note" className="block text-xs font-bold text-slate-800">
+                      {workflowAction === 'complete'
+                        ? 'Resolution message to the founder'
+                        : 'Reason for rejecting (sent to the founder)'}
+                      <span className="text-rose-500"> *</span>
+                    </label>
+                    <textarea
+                      id="workflow-note"
+                      rows={3}
+                      autoFocus
+                      value={workflowNote}
+                      onChange={(e) => setWorkflowNote(e.target.value)}
+                      placeholder={
+                        workflowAction === 'complete'
+                          ? 'e.g. Tranche 2 has been released to your account. The UC has been accepted.'
+                          : 'e.g. This is a duplicate of VB-TKT-1042, which we are already handling.'
+                      }
+                      className="w-full p-2.5 bg-white border border-slate-200 rounded-lg text-xs"
+                    />
+                    <div className="flex items-center justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={closeWorkflowBox}
+                        className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 text-slate-700 font-semibold text-xs"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={workflowBusy || !workflowNote.trim()}
+                        className={`px-3 py-1.5 rounded-lg text-white font-bold text-xs disabled:opacity-50 ${
+                          workflowAction === 'complete' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-slate-700 hover:bg-slate-800'
+                        }`}
+                      >
+                        {workflowBusy
+                          ? 'Saving...'
+                          : workflowAction === 'complete'
+                          ? 'Send & complete request'
+                          : 'Send & close request'}
+                      </button>
+                    </div>
+                  </form>
+                )}
+              </div>
+            )}
+
+            {/* Founder: completion notice */}
+            {!isAdmin && isTicketDone(selectedTicket) && (
+              <div className="mt-3 p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-900 flex items-start gap-2 shrink-0">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                <span>
+                  The incubation team marked this request <strong>{selectedTicket.status.toLowerCase()}</strong>. If you still need
+                  help, raise a new support ticket so it reaches the active queue.
+                </span>
+              </div>
+            )}
 
             {/* Conversation Messages Thread (Scrollable) */}
             <div className="flex-1 overflow-y-auto py-4 space-y-3.5 pr-1">
@@ -858,7 +1302,7 @@ export default function SupportDesk({ isAdmin = false, currentUser }) {
                   <span className="font-bold text-slate-900">
                     {selectedTicket.founder_name} (Founder)
                   </span>
-                  <span className="text-[11px] text-slate-400">
+                  <span className="text-[12px] text-slate-500">
                     {new Date(selectedTicket.created_at).toLocaleString('en-IN')}
                   </span>
                 </div>
@@ -878,22 +1322,22 @@ export default function SupportDesk({ isAdmin = false, currentUser }) {
                     className={`p-4 rounded-xl text-xs space-y-1.5 border ${
                       resp.is_internal
                         ? 'bg-amber-50/80 border-amber-200 text-amber-950'
-                        : resp.author_role?.includes('Directorate')
+                        : (resp.author_role || resp.responder_role)?.includes('Directorate') || (resp.author_role || resp.responder_role) === 'admin'
                         ? 'bg-emerald-50/70 border-emerald-200 text-slate-800'
                         : 'bg-white border-slate-200 text-slate-800'
                     }`}
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-2">
-                        <span className="font-bold text-slate-900">{resp.author_name}</span>
-                        <span className="text-[10px] text-slate-500">({resp.author_role})</span>
+                        <span className="font-bold text-slate-900">{resp.author_name || resp.responder_name || 'VentureBharat Directorate'}</span>
+                        <span className="text-[11px] text-slate-500">({resp.author_role || resp.responder_role || 'admin'})</span>
                         {resp.is_internal && (
-                          <span className="px-1.5 py-0.2 rounded bg-amber-200 text-amber-900 font-bold text-[9px] uppercase">
+                          <span className="px-1.5 py-0.2 rounded bg-amber-200 text-amber-900 font-bold text-[11px] uppercase">
                             Staff Internal Note
                           </span>
                         )}
                       </div>
-                      <span className="text-[10px] text-slate-400">
+                      <span className="text-[11px] text-slate-500">
                         {new Date(resp.created_at).toLocaleTimeString('en-IN', {
                           hour: '2-digit',
                           minute: '2-digit'
@@ -962,7 +1406,7 @@ export default function SupportDesk({ isAdmin = false, currentUser }) {
               </h3>
               <button
                 onClick={() => setSelectedCallback(null)}
-                className="p-1 rounded text-slate-400 hover:text-slate-700"
+                className="p-1 rounded text-slate-500 hover:text-slate-700"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -983,13 +1427,13 @@ export default function SupportDesk({ isAdmin = false, currentUser }) {
 
             <div className="pt-2">
               <label className="block font-semibold text-slate-700 mb-1">
-                Admin Disposition Notes
+                Message to founder <span className="font-normal text-slate-500">(visible to the startup)</span>
               </label>
               <textarea
                 rows={2}
                 value={adminCallbackNote}
                 onChange={(e) => setAdminCallbackNote(e.target.value)}
-                placeholder="Log discussion outcomes or action items..."
+                placeholder="e.g. Verified. An officer will call you on Wednesday at 11:30 AM."
                 className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs"
               />
             </div>
@@ -999,7 +1443,7 @@ export default function SupportDesk({ isAdmin = false, currentUser }) {
                 onClick={() => handleUpdateCallback(selectedCallback.id, 'Scheduled')}
                 className="px-3 py-1.5 rounded-lg border border-slate-200 font-semibold text-slate-700 hover:bg-slate-50"
               >
-                Mark Scheduled
+                Verify &amp; schedule
               </button>
               <button
                 onClick={() => handleUpdateCallback(selectedCallback.id, 'Completed')}
@@ -1009,6 +1453,24 @@ export default function SupportDesk({ isAdmin = false, currentUser }) {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Action feedback */}
+      {toast && (
+        <div
+          role="status"
+          aria-live="polite"
+          className={`fixed bottom-5 right-5 left-5 sm:left-auto z-[60] max-w-sm px-4 py-3 rounded-xl shadow-lg border text-xs font-semibold flex items-start gap-2 ${
+            toast.tone === 'error' ? 'bg-rose-50 border-rose-200 text-rose-800' : 'bg-white border-emerald-200 text-slate-800'
+          }`}
+        >
+          {toast.tone === 'error' ? (
+            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+          ) : (
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+          )}
+          <span>{toast.message}</span>
         </div>
       )}
     </div>

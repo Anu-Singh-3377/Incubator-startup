@@ -232,28 +232,28 @@ export default function VendorDirectory({ isAdmin = false, currentUser }) {
       {/* Metrics Row */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <div className="p-4 rounded-xl bg-white border border-slate-200/90 shadow-xs">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Partner Vendors</p>
+          <p className="text-[12px] font-semibold uppercase tracking-wider text-slate-500">Partner Vendors</p>
           <p className="text-2xl font-black text-slate-900 mt-1">{vendors.length}</p>
-          <p className="text-[11px] text-slate-400 mt-0.5">Empanelled organizations</p>
+          <p className="text-[12px] text-slate-500 mt-0.5">Empanelled organizations</p>
         </div>
         <div className="p-4 rounded-xl bg-white border border-slate-200/90 shadow-xs">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Cloud &amp; DevOps</p>
+          <p className="text-[12px] font-semibold uppercase tracking-wider text-slate-500">Cloud &amp; DevOps</p>
           <p className="text-2xl font-black text-emerald-700 mt-1">
             {vendors.filter((v) => v.service_category?.includes('Cloud')).length}
           </p>
-          <p className="text-[11px] text-slate-400 mt-0.5">AWS, Azure &amp; GCP</p>
+          <p className="text-[12px] text-slate-500 mt-0.5">AWS, Azure &amp; GCP</p>
         </div>
         <div className="p-4 rounded-xl bg-white border border-slate-200/90 shadow-xs">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Legal &amp; Patents</p>
+          <p className="text-[12px] font-semibold uppercase tracking-wider text-slate-500">Legal &amp; Patents</p>
           <p className="text-2xl font-black text-blue-700 mt-1">
             {vendors.filter((v) => v.service_category?.includes('Legal')).length}
           </p>
-          <p className="text-[11px] text-slate-400 mt-0.5">Govt subsidized IPR</p>
+          <p className="text-[12px] text-slate-500 mt-0.5">Govt subsidized IPR</p>
         </div>
         <div className="p-4 rounded-xl bg-white border border-slate-200/90 shadow-xs">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Total Credit Value</p>
+          <p className="text-[12px] font-semibold uppercase tracking-wider text-slate-500">Total Credit Value</p>
           <p className="text-2xl font-black text-amber-700 mt-1">₹45+ Lakh</p>
-          <p className="text-[11px] text-slate-400 mt-0.5">Available per cohort venture</p>
+          <p className="text-[12px] text-slate-500 mt-0.5">Available per cohort venture</p>
         </div>
       </div>
 
@@ -261,7 +261,7 @@ export default function VendorDirectory({ isAdmin = false, currentUser }) {
       <div className="p-4 rounded-xl bg-white border border-slate-200/90 shadow-xs flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
         {/* Search */}
         <div className="relative flex-1">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+          <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             value={searchTerm}
@@ -337,7 +337,7 @@ export default function VendorDirectory({ isAdmin = false, currentUser }) {
                 {/* Header: Company & Category */}
                 <div className="flex items-start justify-between gap-2 mb-3">
                   <div>
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 inline-block mb-1.5">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 inline-block mb-1.5">
                       {vnd.service_category}
                     </span>
                     <h3 className="text-sm font-bold text-slate-900 group-hover:text-emerald-700 transition leading-snug">
@@ -346,7 +346,7 @@ export default function VendorDirectory({ isAdmin = false, currentUser }) {
                   </div>
 
                   <span
-                    className={`px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0 ${
+                    className={`px-2 py-0.5 rounded-full text-[11px] font-bold shrink-0 ${
                       vnd.approval_status === 'Approved'
                         ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                         : 'bg-amber-50 text-amber-700 border border-amber-200'
@@ -358,7 +358,7 @@ export default function VendorDirectory({ isAdmin = false, currentUser }) {
 
                 {/* Highlighted Perks Callout Box */}
                 <div className="p-3 rounded-lg bg-emerald-50/70 border border-emerald-100 text-emerald-950 mb-3">
-                  <div className="flex items-center space-x-1.5 text-[11px] font-bold text-emerald-800 mb-1">
+                  <div className="flex items-center space-x-1.5 text-[12px] font-bold text-emerald-800 mb-1">
                     <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
                     <span>Incubator Exclusive Perk</span>
                   </div>
@@ -373,22 +373,22 @@ export default function VendorDirectory({ isAdmin = false, currentUser }) {
                 </p>
 
                 {/* Eligibility & Expiry */}
-                <div className="space-y-1.5 pt-3 border-t border-slate-100 text-[11px] text-slate-500">
+                <div className="space-y-1.5 pt-3 border-t border-slate-100 text-[12px] text-slate-500">
                   <div className="flex items-center justify-between">
-                    <span className="text-slate-400 font-medium">Eligibility:</span>
+                    <span className="text-slate-500 font-medium">Eligibility:</span>
                     <span className="font-medium text-slate-700 truncate max-w-[180px]">
                       {vnd.eligibility}
                     </span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-slate-400 font-medium">Valid Till:</span>
+                    <span className="text-slate-500 font-medium">Valid Till:</span>
                     <span className="font-semibold text-slate-700">{vnd.expiry_date}</span>
                   </div>
                 </div>
 
                 {/* Internal notes banner for Admin */}
                 {isAdmin && vnd.internal_notes && (
-                  <div className="mt-3 p-2 bg-amber-50/80 border border-amber-200/70 rounded-lg text-[11px] text-amber-900 leading-tight">
+                  <div className="mt-3 p-2 bg-amber-50/80 border border-amber-200/70 rounded-lg text-[12px] text-amber-900 leading-tight">
                     <span className="font-bold">Staff Note: </span>
                     <span className="line-clamp-2">{vnd.internal_notes}</span>
                   </div>
@@ -403,7 +403,7 @@ export default function VendorDirectory({ isAdmin = false, currentUser }) {
                       href={vnd.website_url}
                       target="_blank"
                       rel="noreferrer"
-                      className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-700 hover:bg-white transition border border-transparent hover:border-slate-200"
+                      className="p-1.5 rounded-lg text-slate-500 hover:text-emerald-700 hover:bg-white transition border border-transparent hover:border-slate-200"
                       title="Partner Website"
                     >
                       <ExternalLink className="w-3.5 h-3.5" />
@@ -412,7 +412,7 @@ export default function VendorDirectory({ isAdmin = false, currentUser }) {
                   {vnd.contact_email && (
                     <a
                       href={`mailto:${vnd.contact_email}`}
-                      className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-700 hover:bg-white transition border border-transparent hover:border-slate-200"
+                      className="p-1.5 rounded-lg text-slate-500 hover:text-emerald-700 hover:bg-white transition border border-transparent hover:border-slate-200"
                       title={vnd.contact_email}
                     >
                       <Mail className="w-3.5 h-3.5" />
@@ -439,7 +439,7 @@ export default function VendorDirectory({ isAdmin = false, currentUser }) {
                       </button>
                       <button
                         onClick={() => handleDelete(vnd.id, vnd.company_name)}
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition"
+                        className="p-1.5 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-rose-50 transition"
                         title="Delete Vendor"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -488,7 +488,7 @@ export default function VendorDirectory({ isAdmin = false, currentUser }) {
           <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200">
             <div className="flex items-start justify-between pb-4 border-b border-slate-100">
               <div>
-                <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
                   {redemptionModal.service_category}
                 </span>
                 <h3 className="text-base font-bold text-slate-900 mt-1">
@@ -497,7 +497,7 @@ export default function VendorDirectory({ isAdmin = false, currentUser }) {
               </div>
               <button
                 onClick={() => setRedemptionModal(null)}
-                className="p-1 rounded text-slate-400 hover:text-slate-700"
+                className="p-1 rounded text-slate-500 hover:text-slate-700"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -505,7 +505,7 @@ export default function VendorDirectory({ isAdmin = false, currentUser }) {
 
             <div className="py-4 space-y-4 text-xs">
               <div className="p-3.5 bg-emerald-50/80 rounded-xl border border-emerald-200">
-                <span className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider block mb-1">
+                <span className="text-[12px] font-bold text-emerald-800 uppercase tracking-wider block mb-1">
                   Exclusive Offer Details
                 </span>
                 <p className="font-semibold text-emerald-950 text-sm">
@@ -514,7 +514,7 @@ export default function VendorDirectory({ isAdmin = false, currentUser }) {
               </div>
 
               <div>
-                <h4 className="font-bold text-slate-800 text-[11px] uppercase tracking-wider mb-1.5">
+                <h4 className="font-bold text-slate-800 text-[12px] uppercase tracking-wider mb-1.5">
                   Redemption Instructions
                 </h4>
                 <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-700 font-medium leading-relaxed whitespace-pre-line">
@@ -524,14 +524,14 @@ export default function VendorDirectory({ isAdmin = false, currentUser }) {
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="p-3 bg-slate-50 border border-slate-100 rounded-lg">
-                  <span className="text-[10px] text-slate-400 uppercase font-bold">Partner Contact</span>
+                  <span className="text-[11px] text-slate-500 uppercase font-bold">Partner Contact</span>
                   <p className="font-semibold text-slate-800 mt-0.5">{redemptionModal.contact_person || 'Partner Desk'}</p>
-                  <p className="text-[11px] text-slate-500 font-mono">{redemptionModal.contact_email}</p>
+                  <p className="text-[12px] text-slate-500 font-mono">{redemptionModal.contact_email}</p>
                 </div>
                 <div className="p-3 bg-slate-50 border border-slate-100 rounded-lg">
-                  <span className="text-[10px] text-slate-400 uppercase font-bold">Offer Validity</span>
+                  <span className="text-[11px] text-slate-500 uppercase font-bold">Offer Validity</span>
                   <p className="font-semibold text-slate-800 mt-0.5">{redemptionModal.expiry_date}</p>
-                  <p className="text-[11px] text-slate-500">{redemptionModal.eligibility}</p>
+                  <p className="text-[12px] text-slate-500">{redemptionModal.eligibility}</p>
                 </div>
               </div>
 
@@ -585,7 +585,7 @@ export default function VendorDirectory({ isAdmin = false, currentUser }) {
               </h3>
               <button
                 onClick={() => setIsFormOpen(false)}
-                className="p-1 rounded text-slate-400 hover:text-slate-700"
+                className="p-1 rounded text-slate-500 hover:text-slate-700"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -617,7 +617,7 @@ export default function VendorDirectory({ isAdmin = false, currentUser }) {
                     className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-xs"
                   />
                   {formErrors.company_name && (
-                    <p className="text-rose-500 text-[10px] mt-1">{formErrors.company_name}</p>
+                    <p className="text-rose-500 text-[11px] mt-1">{formErrors.company_name}</p>
                   )}
                 </div>
 
@@ -652,7 +652,7 @@ export default function VendorDirectory({ isAdmin = false, currentUser }) {
                   className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium"
                 />
                 {formErrors.perks_summary && (
-                  <p className="text-rose-500 text-[10px] mt-1">{formErrors.perks_summary}</p>
+                  <p className="text-rose-500 text-[11px] mt-1">{formErrors.perks_summary}</p>
                 )}
               </div>
 
@@ -668,7 +668,7 @@ export default function VendorDirectory({ isAdmin = false, currentUser }) {
                   className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-xs"
                 />
                 {formErrors.description && (
-                  <p className="text-rose-500 text-[10px] mt-1">{formErrors.description}</p>
+                  <p className="text-rose-500 text-[11px] mt-1">{formErrors.description}</p>
                 )}
               </div>
 
@@ -696,7 +696,7 @@ export default function VendorDirectory({ isAdmin = false, currentUser }) {
                     className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-xs"
                   />
                   {formErrors.contact_email && (
-                    <p className="text-rose-500 text-[10px] mt-1">{formErrors.contact_email}</p>
+                    <p className="text-rose-500 text-[11px] mt-1">{formErrors.contact_email}</p>
                   )}
                 </div>
               </div>

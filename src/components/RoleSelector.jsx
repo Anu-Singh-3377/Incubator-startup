@@ -61,7 +61,7 @@ export default function RoleSelector({ activeRole, onRoleChange }) {
                   {r.badge}
                 </span>
               </div>
-              <span className="text-xs font-bold leading-tight text-slate-900">{r.label}</span>
+              <span className="text-[0.75rem]/4 font-bold leading-tight text-slate-900">{r.label}</span>
               <span className="text-[10px] text-slate-500 font-normal mt-0.5 leading-tight">
                 {r.sublabel}
               </span>

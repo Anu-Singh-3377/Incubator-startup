@@ -330,7 +330,7 @@ export default function CommunicationHub({ isAdmin = true, currentUser }) {
                 The communication hub is running in safe mode. Real transactional emails require a free Resend API key.
                 Per incubator protocol, real deliveries are blocked to prevent false delivery confirmations.
               </p>
-              <div className="mt-2 p-2.5 bg-white/70 rounded-lg border border-amber-200/60 font-mono text-[11px] space-y-1 text-slate-800">
+              <div className="mt-2 p-2.5 bg-white/70 rounded-lg border border-amber-200/60 font-mono text-[12px] space-y-1 text-slate-800">
                 <p>1. Sign up for free at <a href="https://resend.com" target="_blank" rel="noreferrer" className="text-emerald-700 underline font-bold">resend.com</a></p>
                 <p>2. Create an API Key under <strong>API Keys</strong> &gt; <strong>Create API Key</strong></p>
                 <p>3. Set in your <code className="bg-amber-100 px-1 py-0.5 rounded">.env</code> file: <code className="text-emerald-800 font-bold">RESEND_API_KEY=re_your_api_key_here</code></p>
@@ -342,10 +342,10 @@ export default function CommunicationHub({ isAdmin = true, currentUser }) {
       )}
 
       {/* Navigation Sub-Tabs */}
-      <div className="flex items-center space-x-2 border-b border-slate-200">
+      <div className="flex items-center space-x-2 border-b border-slate-200 overflow-x-auto">
         <button
           onClick={() => setSubTab('compose')}
-          className={`flex items-center space-x-2 px-4 py-2.5 text-xs font-bold border-b-2 transition ${
+          className={`flex items-center space-x-2 px-4 py-2.5 text-xs font-bold border-b-2 transition shrink-0 whitespace-nowrap ${
             subTab === 'compose'
               ? 'border-emerald-600 text-emerald-800'
               : 'border-transparent text-slate-500 hover:text-slate-800'
@@ -357,7 +357,7 @@ export default function CommunicationHub({ isAdmin = true, currentUser }) {
 
         <button
           onClick={() => setSubTab('templates')}
-          className={`flex items-center space-x-2 px-4 py-2.5 text-xs font-bold border-b-2 transition ${
+          className={`flex items-center space-x-2 px-4 py-2.5 text-xs font-bold border-b-2 transition shrink-0 whitespace-nowrap ${
             subTab === 'templates'
               ? 'border-emerald-600 text-emerald-800'
               : 'border-transparent text-slate-500 hover:text-slate-800'
@@ -369,7 +369,7 @@ export default function CommunicationHub({ isAdmin = true, currentUser }) {
 
         <button
           onClick={() => setSubTab('history')}
-          className={`flex items-center space-x-2 px-4 py-2.5 text-xs font-bold border-b-2 transition ${
+          className={`flex items-center space-x-2 px-4 py-2.5 text-xs font-bold border-b-2 transition shrink-0 whitespace-nowrap ${
             subTab === 'history'
               ? 'border-emerald-600 text-emerald-800'
               : 'border-transparent text-slate-500 hover:text-slate-800'
@@ -399,7 +399,7 @@ export default function CommunicationHub({ isAdmin = true, currentUser }) {
           </div>
           <button
             onClick={() => setActionFeedback(null)}
-            className="p-1 rounded text-slate-400 hover:text-slate-700"
+            className="p-1 rounded text-slate-500 hover:text-slate-700"
           >
             <X className="w-3.5 h-3.5" />
           </button>
@@ -418,7 +418,7 @@ export default function CommunicationHub({ isAdmin = true, currentUser }) {
                 </h3>
                 {/* Template quick loader */}
                 <div className="flex items-center space-x-2">
-                  <span className="text-[11px] text-slate-500 font-medium">Load Template:</span>
+                  <span className="text-[12px] text-slate-500 font-medium">Load Template:</span>
                   <select
                     value={selectedTemplateId}
                     onChange={(e) => handleSelectTemplate(e.target.value)}
@@ -500,7 +500,7 @@ export default function CommunicationHub({ isAdmin = true, currentUser }) {
                       key={v}
                       type="button"
                       onClick={() => handleInsertVariable(v)}
-                      className="px-2 py-1 rounded bg-white hover:bg-emerald-50 hover:text-emerald-800 border border-slate-200 text-[11px] font-mono font-medium text-slate-700 transition shadow-2xs"
+                      className="px-2 py-1 rounded bg-white hover:bg-emerald-50 hover:text-emerald-800 border border-slate-200 text-[12px] font-mono font-medium text-slate-700 transition shadow-2xs"
                     >
                       + {v}
                     </button>
@@ -533,7 +533,7 @@ export default function CommunicationHub({ isAdmin = true, currentUser }) {
               </div>
 
               {/* Footer preview note */}
-              <div className="p-3 rounded-lg bg-slate-100/70 border border-slate-200 text-[11px] text-slate-500 leading-relaxed">
+              <div className="p-3 rounded-lg bg-slate-100/70 border border-slate-200 text-[12px] text-slate-500 leading-relaxed">
                 <strong>Statutory Footer Appended Automatically:</strong> All dispatched emails automatically include incubator address (Atal Incubation Centre, Tech Innovation Park, New Delhi), anti-spam compliance, and founder privacy protection.
               </div>
 
@@ -585,7 +585,7 @@ export default function CommunicationHub({ isAdmin = true, currentUser }) {
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-slate-500">From Address:</span>
-                  <span className="font-mono text-[11px] text-slate-600 truncate max-w-[170px]">
+                  <span className="font-mono text-[12px] text-slate-600 truncate max-w-[170px]">
                     {senderEmail}
                   </span>
                 </div>
@@ -600,12 +600,12 @@ export default function CommunicationHub({ isAdmin = true, currentUser }) {
                   Send Test Verification
                 </h4>
               </div>
-              <p className="text-[11px] text-slate-500">
+              <p className="text-[12px] text-slate-500">
                 Safely verify rendering and formatting in an inbox before broadcasting to all founders.
               </p>
 
               <div className="space-y-2">
-                <label className="block text-[11px] font-semibold text-slate-700">
+                <label className="block text-[12px] font-semibold text-slate-700">
                   Recipient Test Address
                 </label>
                 <input
@@ -633,7 +633,7 @@ export default function CommunicationHub({ isAdmin = true, currentUser }) {
                 <HelpCircle className="w-4 h-4 text-emerald-600" />
                 <span>Enterprise Delivery Engine</span>
               </div>
-              <p className="text-slate-500 text-[11px] leading-relaxed">
+              <p className="text-slate-500 text-[12px] leading-relaxed">
                 Transactional messaging runs over TLS-encrypted REST endpoints with DMARC, DKIM, and SPF validation.
               </p>
             </div>
@@ -661,10 +661,10 @@ export default function CommunicationHub({ isAdmin = true, currentUser }) {
               >
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-slate-100 text-slate-600">
+                    <span className="px-2 py-0.5 rounded text-[11px] font-bold uppercase bg-slate-100 text-slate-600">
                       {tpl.category}
                     </span>
-                    <span className="text-[10px] font-semibold text-emerald-700">
+                    <span className="text-[11px] font-semibold text-emerald-700">
                       Standard Template
                     </span>
                   </div>
@@ -676,7 +676,7 @@ export default function CommunicationHub({ isAdmin = true, currentUser }) {
                     Subject: {tpl.subject}
                   </p>
 
-                  <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-100 text-[11px] text-slate-500 line-clamp-3 mb-3 font-mono">
+                  <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-100 text-[12px] text-slate-500 line-clamp-3 mb-3 font-mono">
                     {tpl.body_content.replace(/<[^>]+>/g, ' ')}
                   </div>
 
@@ -685,7 +685,7 @@ export default function CommunicationHub({ isAdmin = true, currentUser }) {
                       {tpl.supported_variables.map((v, i) => (
                         <span
                           key={i}
-                          className="px-1.5 py-0.5 rounded bg-emerald-50 text-[10px] font-mono text-emerald-800 border border-emerald-100"
+                          className="px-1.5 py-0.5 rounded bg-emerald-50 text-[11px] font-mono text-emerald-800 border border-emerald-100"
                         >
                           {v}
                         </span>
@@ -741,7 +741,7 @@ export default function CommunicationHub({ isAdmin = true, currentUser }) {
 
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
-              <thead className="bg-slate-50/70 border-b border-slate-200 text-slate-500 font-semibold uppercase tracking-wider text-[10px]">
+              <thead className="bg-slate-50/70 border-b border-slate-200 text-slate-500 font-semibold uppercase tracking-wider text-[11px]">
                 <tr>
                   <th className="py-3 px-4">Dispatched At</th>
                   <th className="py-3 px-4">Subject Line</th>
@@ -754,7 +754,7 @@ export default function CommunicationHub({ isAdmin = true, currentUser }) {
               <tbody className="divide-y divide-slate-100">
                 {emailLogs.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="py-8 text-center text-slate-400">
+                    <td colSpan={6} className="py-8 text-center text-slate-500">
                       No communications logged yet.
                     </td>
                   </tr>
@@ -778,11 +778,11 @@ export default function CommunicationHub({ isAdmin = true, currentUser }) {
                       <td className="py-3 px-4 text-center font-bold text-slate-800">
                         {log.recipient_count}
                       </td>
-                      <td className="py-3 px-4 font-mono text-[11px] text-slate-500">
+                      <td className="py-3 px-4 font-mono text-[12px] text-slate-500">
                         {log.sender}
                       </td>
                       <td className="py-3 px-4 text-right">
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
                           {log.status}
                         </span>
                       </td>
@@ -805,7 +805,7 @@ export default function CommunicationHub({ isAdmin = true, currentUser }) {
               </h3>
               <button
                 onClick={() => setPreviewModalOpen(false)}
-                className="p-1 rounded text-slate-400 hover:text-slate-700"
+                className="p-1 rounded text-slate-500 hover:text-slate-700"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -824,12 +824,12 @@ export default function CommunicationHub({ isAdmin = true, currentUser }) {
                   dangerouslySetInnerHTML={{
                     __html:
                       bodyContent ||
-                      '<p className="text-slate-400 italic">No message content entered yet.</p>'
+                      '<p className="text-slate-500 italic">No message content entered yet.</p>'
                   }}
                 />
                 
                 {/* Official email footer */}
-                <div className="mt-8 pt-4 border-t border-slate-200 text-[10px] text-slate-400 leading-tight">
+                <div className="mt-8 pt-4 border-t border-slate-200 text-[11px] text-slate-500 leading-tight">
                   <p>VentureBharat Incubation Foundation (AIC - DST Recognized)</p>
                   <p>Technology Innovation &amp; Prototyping Hub, Okhla Phase III, New Delhi 110020</p>
                   <p className="mt-1">You are receiving this communication as a registered founder under VentureBharat Incubation Cohort.</p>
@@ -859,7 +859,7 @@ export default function CommunicationHub({ isAdmin = true, currentUser }) {
               </h3>
               <button
                 onClick={() => setTemplateEditModal(null)}
-                className="p-1 rounded text-slate-400 hover:text-slate-700"
+                className="p-1 rounded text-slate-500 hover:text-slate-700"
               >
                 <X className="w-4 h-4" />
               </button>

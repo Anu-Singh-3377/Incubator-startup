@@ -788,7 +788,9 @@ const MOCK_SUPPORT_TICKETS = [
       {
         id: 'resp_01',
         responder_name: 'Incubation Operations Desk',
+        author_name: 'Incubation Operations Desk',
         responder_role: 'admin',
+        author_role: 'admin',
         message: 'Your invoices have been verified by the internal finance team and passed to CA FinZen. Please ensure your physical asset ledger is updated for Bay 4B inspection.',
         created_at: '2026-10-21T11:00:00Z'
       }
@@ -814,7 +816,9 @@ const MOCK_SUPPORT_TICKETS = [
       {
         id: 'resp_02',
         responder_name: 'Lab Directorate',
+        author_name: 'Lab Directorate',
         responder_role: 'admin',
+        author_role: 'admin',
         message: 'Access card issued and verified on biometric scanner. Access valid 24/7.',
         created_at: '2026-10-12T09:30:00Z'
       }
@@ -875,7 +879,153 @@ const MOCK_CALLBACK_REQUESTS = [
   }
 ];
 
+const MOCK_MENTOR_BOOKINGS = [
+  {
+    id: 'mb_01',
+    reference_number: 'VB-MB-401',
+    mentor_id: 'men_01',
+    mentor_name: 'Dr. Radhika Iyer',
+    mentor_organization: 'IIT Bombay & DeepTech Advisory Board',
+    startup_id: 'st_01',
+    startup_name: 'Agri',
+    founder_name: 'ravi',
+    founder_email: 'ravi@startup.in',
+    topic: 'Assistance with SISFS Tranche 2 Milestone 1 UC documentation and patent validation',
+    preferred_date: '2026-11-04',
+    preferred_time_window: 'Morning (10 AM - 1 PM)',
+    preferred_mode: 'Virtual Video Conference',
+    status: 'Requested',
+    meeting_link: '',
+    admin_notes: 'Requested review of deeptech patent claim draft.',
+    created_at: new Date(Date.now() - 3600000 * 4).toISOString(),
+    updated_at: new Date(Date.now() - 3600000 * 4).toISOString()
+  },
+  {
+    id: 'mb_02',
+    reference_number: 'VB-MB-402',
+    mentor_id: 'men_02',
+    mentor_name: 'Suresh Narayanan',
+    mentor_organization: 'Bharat Angel Network & Venture Partner',
+    startup_id: 'st_02',
+    startup_name: 'ChargeBharat EV',
+    founder_name: 'Ankit Deshmukh',
+    founder_email: 'ankit@chargebharat.com',
+    topic: 'Seed round cap table review and institutional investor term sheet negotiation',
+    preferred_date: '2026-11-06',
+    preferred_time_window: 'Afternoon (2 PM - 5 PM)',
+    preferred_mode: 'Virtual Video Conference',
+    status: 'Scheduled',
+    meeting_link: 'https://meet.google.com/xyz-bharat-ev',
+    admin_notes: 'Session scheduled for Friday 3:30 PM IST.',
+    created_at: new Date(Date.now() - 3600000 * 24).toISOString(),
+    updated_at: new Date(Date.now() - 3600000 * 12).toISOString()
+  }
+];
+
 // Unified Supabase Service
+// ================= MILESTONE PROGRAMME (offline preview copy) =================
+// Mirrors the seed rows in supabase/migration_milestone_progress.sql. Used only when Supabase is not configured.
+const LOCAL_MILESTONE_STAGES = [
+  { id: 'onboarding', stage_order: 1, title: 'Screening & Onboarding', description: 'DPIIT registration & AIC MoU signed' },
+  { id: 'prototyping', stage_order: 2, title: 'Lab Prototyping', description: 'Hardware fabrication in Cleanroom Bay 4B' },
+  { id: 'pilot', stage_order: 3, title: 'Field Pilot Testing', description: 'Agricultural sensor deployment' },
+  { id: 'tranche2', stage_order: 4, title: 'Tranche 2 Disbursal', description: 'Milestone UC verification' },
+  { id: 'demoday', stage_order: 5, title: 'Cohort Demo Day', description: 'Pitching to angel networks' }
+];
+
+const LOCAL_MILESTONE_TASKS = [
+  ['onboarding.dpiit', 'onboarding', 1, 'DPIIT recognition certificate', 'Obtain and share the DPIIT startup recognition certificate.', 'DPIIT certificate (PDF)'],
+  ['onboarding.mou', 'onboarding', 2, 'Incubation MoU signed', 'Sign the AIC incubation agreement and MoU.', 'Signed MoU (PDF)'],
+  ['onboarding.pfms', 'onboarding', 3, 'Bank & PFMS registration', 'Register the startup bank account on PFMS for grant transfers.', 'PFMS registration screenshot'],
+  ['onboarding.orientation', 'onboarding', 4, 'Cohort orientation attended', 'Attend the cohort onboarding and orientation session.', null],
+  ['prototyping.design', 'prototyping', 1, 'Prototype design finalised', 'Freeze the design, CAD files and bill of materials.', 'BOM or design document'],
+  ['prototyping.safety', 'prototyping', 2, 'Lab safety induction completed', 'Complete the cleanroom and lab safety induction.', 'Induction certificate'],
+  ['prototyping.build', 'prototyping', 3, 'Working prototype built', 'Assemble a working prototype in the allotted lab.', 'Photo of the prototype'],
+  ['prototyping.bench_test', 'prototyping', 4, 'Bench test report', 'Run bench tests and document the results.', 'Test report (PDF)'],
+  ['pilot.site_agreement', 'pilot', 1, 'Pilot site agreement', 'Sign an agreement with the pilot site or partner.', 'Signed agreement'],
+  ['pilot.deployment', 'pilot', 2, 'Pilot units deployed', 'Deploy the pilot units in the field.', 'Deployment photos'],
+  ['pilot.feedback', 'pilot', 3, 'Pilot data & feedback report', 'Collect field data and user feedback from the pilot.', 'Pilot report (PDF)'],
+  ['pilot.ip_filing', 'pilot', 4, 'IP / patent filing initiated', 'File or initiate the provisional patent or IP application.', 'Filing receipt'],
+  ['tranche2.uc', 'tranche2', 1, 'Tranche 1 Utilisation Certificate', 'Submit the Utilisation Certificate for Tranche 1.', 'Signed UC (PDF)'],
+  ['tranche2.expenses', 'tranche2', 2, 'Audited expense statement', 'Share the CA-audited statement of Tranche 1 expenses.', 'Audited statement (PDF)'],
+  ['tranche2.review', 'tranche2', 3, 'Milestone review presentation', 'Present milestone progress to the review committee.', 'Presentation deck'],
+  ['tranche2.request', 'tranche2', 4, 'Tranche 2 request filed', 'File the formal Tranche 2 disbursal request.', null],
+  ['demoday.deck', 'demoday', 1, 'Pitch deck finalised', 'Finalise the investor pitch deck.', 'Pitch deck (PDF)'],
+  ['demoday.mock_pitch', 'demoday', 2, 'Mock pitch with mentor', 'Rehearse the pitch with your assigned mentor.', null],
+  ['demoday.financials', 'demoday', 3, 'Financial model prepared', 'Prepare a 3-year financial model and fundraising ask.', 'Financial model'],
+  ['demoday.pitch', 'demoday', 4, 'Demo Day pitch delivered', 'Pitch to the angel network at Cohort Demo Day.', null]
+].map(([id, stage_id, sort_order, title, description, evidence_hint]) => ({ id, stage_id, sort_order, title, description, evidence_hint, is_active: true }));
+
+const readLocalList = (key) => {
+  try {
+    return JSON.parse(localStorage.getItem(key) || '[]');
+  } catch {
+    return [];
+  }
+};
+
+const writeLocalList = (key, list) => {
+  localStorage.setItem(key, JSON.stringify(list));
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event('vb-task-submissions-changed'));
+};
+
+const logLocalTaskEvent = (row, actorRole) => {
+  const action =
+    row.status === 'In Progress'
+      ? 'draft_saved'
+      : row.status === 'Submitted for Review'
+      ? row.submission_count > 1
+        ? 'resubmitted'
+        : 'submitted'
+      : row.status === 'Verified by Admin'
+      ? 'verified'
+      : 'changes_requested';
+  const events = readLocalList('vb_task_events_cache');
+  events.push({
+    id: 'tev_' + Date.now() + Math.random().toString(36).slice(2, 6),
+    submission_id: row.id,
+    startup_id: row.startup_id,
+    action,
+    status: row.status,
+    remarks: actorRole === 'admin' ? row.admin_remarks : row.founder_remarks,
+    actor_role: actorRole,
+    created_at: new Date().toISOString()
+  });
+  localStorage.setItem('vb_task_events_cache', JSON.stringify(events));
+};
+
+// Resilient memory cache to avoid repeatedly firing 404 network requests for unmigrated tables
+const knownMissingTables = new Set();
+
+function isTableMissing(tableName) {
+  if (knownMissingTables.has(tableName)) return true;
+  if (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('vb_missing_tbl_' + tableName) === 'true') {
+    knownMissingTables.add(tableName);
+    return true;
+  }
+  return false;
+}
+
+function markTableMissing(tableName) {
+  knownMissingTables.add(tableName);
+  if (typeof sessionStorage !== 'undefined') {
+    sessionStorage.setItem('vb_missing_tbl_' + tableName, 'true');
+  }
+}
+
+if (typeof window !== 'undefined') {
+  window.vbClearMigrationCache = () => {
+    knownMissingTables.clear();
+    if (typeof sessionStorage !== 'undefined') {
+      Object.keys(sessionStorage).forEach((k) => {
+        if (k.startsWith('vb_missing_tbl_')) sessionStorage.removeItem(k);
+      });
+    }
+    console.info('[VentureBharat] Cache cleared. Re-probing Supabase tables on reload...');
+    window.location.reload();
+  };
+}
+
 export const supabaseService = {
   // Subscribe to Auth State Changes
   onAuthStateChange(callback) {
@@ -1236,18 +1386,54 @@ export const supabaseService = {
 
     if (isSupabaseConfigured && supabase) {
       try {
-        const { data, error } = await supabase
+        let { data, error } = await supabase
           .from('startups')
           .insert([formattedData])
           .select()
           .single();
 
         if (error) {
-          console.error('[Supabase Error] addStartup failed:', error);
-          throw error;
+          // If the database is missing extended migration columns (e.g. company_overview, status, mca_number),
+          // fallback to inserting with core schema columns so the startup creation never fails!
+          const isColumnError = error.code === 'PGRST204' || (error.message && error.message.toLowerCase().includes('column'));
+          if (isColumnError) {
+            console.warn('[Supabase Fallback] startups table missing extended migration columns, retrying with core columns...');
+            const coreData = {
+              startup_name: formattedData.startup_name,
+              legal_name: formattedData.legal_name,
+              founder_name: formattedData.founder_name,
+              founder_phone: formattedData.founder_phone,
+              founder_email: formattedData.founder_email,
+              sector: formattedData.sector,
+              cohort: formattedData.cohort,
+              stage: formattedData.stage,
+              dpiit_number: formattedData.dpiit_number,
+              sanctioned_grant: formattedData.sanctioned_grant,
+              disbursed_grant: formattedData.disbursed_grant,
+              grant_scheme: formattedData.grant_scheme,
+              assigned_mentor: formattedData.assigned_mentor,
+              lab_access: formattedData.lab_access,
+              milestone_progress: formattedData.milestone_progress,
+              created_at: formattedData.created_at
+            };
+            const { data: retryData, error: retryError } = await supabase
+              .from('startups')
+              .insert([coreData])
+              .select()
+              .single();
+            if (retryError) {
+              console.error('[Supabase Error] addStartup retry failed:', retryError);
+              throw retryError;
+            }
+            data = retryData;
+          } else {
+            console.error('[Supabase Error] addStartup failed:', error);
+            throw error;
+          }
         }
 
         const enriched = {
+          ...formattedData,
           ...data,
           status: data.status || formattedData.status,
           documents: DEFAULT_COMPLIANCE_DOCS
@@ -1813,12 +1999,37 @@ export const supabaseService = {
   async getSupportTickets(startupId = null) {
     if (isSupabaseConfigured && supabase) {
       try {
-        let query = supabase.from('support_tickets').select('*').order('created_at', { ascending: false });
+        let query = supabase
+          .from('support_tickets')
+          .select('*, responses:ticket_responses(*)')
+          .order('created_at', { ascending: false });
         if (startupId) query = query.eq('startup_id', startupId);
         const { data, error } = await query;
-        if (!error && Array.isArray(data) && data.length > 0) return data;
+        if (error) throw error;
+        if (Array.isArray(data)) {
+          // Normalize responses so author_name and responder_name are both defined
+          return data.map((tkt) => ({
+            ...tkt,
+            responses: (tkt.responses || []).map((r) => ({
+              ...r,
+              author_name: r.author_name || r.responder_name || 'VentureBharat Directorate',
+              author_role: r.author_role || r.responder_role || 'admin',
+              responder_name: r.responder_name || r.author_name || 'VentureBharat Directorate',
+              responder_role: r.responder_role || r.author_role || 'admin'
+            }))
+          }));
+        }
       } catch (err) {
-        console.warn('Error reading support_tickets:', err.message);
+        console.warn('Error reading support_tickets with responses:', err.message);
+        // Fallback without join if foreign key error occurred
+        try {
+          let query = supabase.from('support_tickets').select('*').order('created_at', { ascending: false });
+          if (startupId) query = query.eq('startup_id', startupId);
+          const { data, error } = await query;
+          if (!error && Array.isArray(data)) return data;
+        } catch (innerErr) {
+          console.warn('Error in fallback reading support_tickets:', innerErr.message);
+        }
       }
     }
     const cached = localStorage.getItem('vb_support_tickets_cache');
@@ -1836,13 +2047,54 @@ export const supabaseService = {
     };
 
     if (isSupabaseConfigured && supabase) {
-      const { data, error } = await supabase
-        .from('support_tickets')
-        .insert([fullTicket])
-        .select()
-        .single();
-      if (error) throw error;
-      return { success: true, ticket: data };
+      try {
+        let realStartupId = ticketData.startup_id;
+        const { data: authData } = await supabase.auth.getUser();
+        if (authData?.user) {
+          const { data: startupRow } = await supabase
+            .from('startups')
+            .select('id, startup_name, founder_name, founder_email')
+            .or(`profile_id.eq.${authData.user.id},founder_email.eq.${authData.user.email}`)
+            .maybeSingle();
+
+          if (startupRow) {
+            realStartupId = startupRow.id;
+            fullTicket.startup_name = fullTicket.startup_name || startupRow.startup_name;
+            fullTicket.founder_name = fullTicket.founder_name || startupRow.founder_name;
+            fullTicket.founder_email = fullTicket.founder_email || startupRow.founder_email || authData.user.email;
+          } else if (realStartupId && !realStartupId.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
+            realStartupId = null;
+          }
+        } else if (realStartupId && !realStartupId.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
+          realStartupId = null;
+        }
+
+        fullTicket.startup_id = realStartupId;
+
+        const { data, error } = await supabase
+          .from('support_tickets')
+          .insert([fullTicket])
+          .select()
+          .single();
+
+        if (error) throw error;
+        return { success: true, ticket: data };
+      } catch (err) {
+        console.warn('[Supabase Fallback] createSupportTicket failed, using local cache:', err.message);
+        const current = await this.getSupportTickets();
+        const newEntry = {
+          id: 'tkt_' + Date.now(),
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          responses: [],
+          ...fullTicket
+        };
+        const updated = [newEntry, ...current];
+        if (typeof localStorage !== 'undefined') {
+          localStorage.setItem('vb_support_tickets_cache', JSON.stringify(updated));
+        }
+        return { success: true, ticket: newEntry, isLocal: true };
+      }
     }
 
     const current = await this.getSupportTickets();
@@ -1854,7 +2106,9 @@ export const supabaseService = {
       ...fullTicket
     };
     const updated = [newEntry, ...current];
-    localStorage.setItem('vb_support_tickets_cache', JSON.stringify(updated));
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('vb_support_tickets_cache', JSON.stringify(updated));
+    }
     return { success: true, ticket: newEntry };
   },
 
@@ -1878,20 +2132,66 @@ export const supabaseService = {
   },
 
   async addTicketResponse(ticketId, responseData) {
+    const authorName = responseData.author_name || responseData.responder_name || 'VentureBharat Directorate';
+    const authorRole = responseData.author_role || responseData.responder_role || 'admin';
+    const isInternal = Boolean(responseData.is_internal);
+
     if (isSupabaseConfigured && supabase) {
-      const { data, error } = await supabase
-        .from('ticket_responses')
-        .insert([{ ticket_id: ticketId, ...responseData }])
-        .select()
-        .single();
-      if (error) throw error;
-      return { success: true, response: data };
+      try {
+        // Send payload using PostgreSQL column names: responder_name & responder_role
+        const payload = {
+          ticket_id: ticketId,
+          responder_name: authorName,
+          responder_role: authorRole,
+          message: responseData.message,
+          is_internal: isInternal
+        };
+
+        let { data, error } = await supabase
+          .from('ticket_responses')
+          .insert([payload])
+          .select()
+          .single();
+
+        // If table column is author_name instead of responder_name
+        if (error && (error.code === 'PGRST204' || error.message?.includes('responder_name'))) {
+          const altPayload = {
+            ticket_id: ticketId,
+            author_name: authorName,
+            author_role: authorRole,
+            message: responseData.message,
+            is_internal: isInternal
+          };
+          const retry = await supabase.from('ticket_responses').insert([altPayload]).select().single();
+          data = retry.data;
+          error = retry.error;
+        }
+
+        if (error) throw error;
+
+        const normalized = {
+          ...data,
+          author_name: data.author_name || data.responder_name || authorName,
+          author_role: data.author_role || data.responder_role || authorRole,
+          responder_name: data.responder_name || data.author_name || authorName,
+          responder_role: data.responder_role || data.author_role || authorRole
+        };
+        return { success: true, response: normalized };
+      } catch (err) {
+        console.warn('[Supabase Fallback] addTicketResponse failed, saving to local cache:', err.message);
+      }
     }
+
     const current = await this.getSupportTickets();
     const newResp = {
       id: 'resp_' + Date.now(),
       created_at: new Date().toISOString(),
-      ...responseData
+      author_name: authorName,
+      author_role: authorRole,
+      responder_name: authorName,
+      responder_role: authorRole,
+      message: responseData.message,
+      is_internal: isInternal
     };
     const updated = current.map((t) => {
       if (t.id === ticketId) {
@@ -1899,8 +2199,10 @@ export const supabaseService = {
       }
       return t;
     });
-    localStorage.setItem('vb_support_tickets_cache', JSON.stringify(updated));
-    return { success: true, response: newResp };
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('vb_support_tickets_cache', JSON.stringify(updated));
+    }
+    return { success: true, response: newResp, isLocal: true };
   },
 
   async getCallbackRequests(startupId = null) {
@@ -1909,7 +2211,7 @@ export const supabaseService = {
         let query = supabase.from('callback_requests').select('*').order('created_at', { ascending: false });
         if (startupId) query = query.eq('startup_id', startupId);
         const { data, error } = await query;
-        if (!error && Array.isArray(data) && data.length > 0) return data;
+        if (!error && Array.isArray(data)) return data;
       } catch (err) {
         console.warn('Error reading callback_requests:', err.message);
       }
@@ -1929,13 +2231,52 @@ export const supabaseService = {
     };
 
     if (isSupabaseConfigured && supabase) {
-      const { data, error } = await supabase
-        .from('callback_requests')
-        .insert([fullCallback])
-        .select()
-        .single();
-      if (error) throw error;
-      return { success: true, callback: data };
+      try {
+        let realStartupId = callbackData.startup_id;
+        const { data: authData } = await supabase.auth.getUser();
+        if (authData?.user) {
+          const { data: startupRow } = await supabase
+            .from('startups')
+            .select('id, startup_name, founder_name')
+            .or(`profile_id.eq.${authData.user.id},founder_email.eq.${authData.user.email}`)
+            .maybeSingle();
+
+          if (startupRow) {
+            realStartupId = startupRow.id;
+            fullCallback.startup_name = fullCallback.startup_name || startupRow.startup_name;
+            fullCallback.founder_name = fullCallback.founder_name || startupRow.founder_name;
+          } else if (realStartupId && !realStartupId.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
+            realStartupId = null;
+          }
+        } else if (realStartupId && !realStartupId.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
+          realStartupId = null;
+        }
+
+        fullCallback.startup_id = realStartupId;
+
+        const { data, error } = await supabase
+          .from('callback_requests')
+          .insert([fullCallback])
+          .select()
+          .single();
+
+        if (error) throw error;
+        return { success: true, callback: data };
+      } catch (err) {
+        console.warn('[Supabase Fallback] createCallbackRequest failed, using local cache:', err.message);
+        const current = await this.getCallbackRequests();
+        const newEntry = {
+          id: 'cb_' + Date.now(),
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          ...fullCallback
+        };
+        const updated = [newEntry, ...current];
+        if (typeof localStorage !== 'undefined') {
+          localStorage.setItem('vb_callbacks_cache', JSON.stringify(updated));
+        }
+        return { success: true, callback: newEntry, isLocal: true };
+      }
     }
 
     const current = await this.getCallbackRequests();
@@ -1946,7 +2287,9 @@ export const supabaseService = {
       ...fullCallback
     };
     const updated = [newEntry, ...current];
-    localStorage.setItem('vb_callbacks_cache', JSON.stringify(updated));
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('vb_callbacks_cache', JSON.stringify(updated));
+    }
     return { success: true, callback: newEntry };
   },
 
@@ -1954,7 +2297,8 @@ export const supabaseService = {
     if (isSupabaseConfigured && supabase) {
       const { data, error } = await supabase
         .from('callback_requests')
-        .update({ status: newStatus, admin_notes: adminNotes, updated_at: new Date().toISOString() })
+        // Keep the existing message to the founder when no new note is given
+        .update({ status: newStatus, ...(adminNotes ? { admin_notes: adminNotes } : {}), updated_at: new Date().toISOString() })
         .eq('id', id)
         .select()
         .single();
@@ -1967,6 +2311,433 @@ export const supabaseService = {
     );
     localStorage.setItem('vb_callbacks_cache', JSON.stringify(updated));
     return { success: true, callback: updated.find((c) => c.id === id) };
+  },
+
+  async deleteSupportTicket(id) {
+    if (isSupabaseConfigured && supabase) {
+      // ticket_responses rows are removed by ON DELETE CASCADE
+      const { error } = await supabase.from('support_tickets').delete().eq('id', id);
+      if (error) throw error;
+      return { success: true };
+    }
+    const current = await this.getSupportTickets();
+    localStorage.setItem('vb_support_tickets_cache', JSON.stringify(current.filter((t) => t.id !== id)));
+    return { success: true };
+  },
+
+  async deleteCallbackRequest(id) {
+    if (isSupabaseConfigured && supabase) {
+      const { error } = await supabase.from('callback_requests').delete().eq('id', id);
+      if (error) throw error;
+      return { success: true };
+    }
+    const current = await this.getCallbackRequests();
+    localStorage.setItem('vb_callbacks_cache', JSON.stringify(current.filter((c) => c.id !== id)));
+    return { success: true };
+  },
+
+  // ================= 6A. MONTHLY PROGRESS REPORTS & MILESTONE RESILIENCE =================
+  async getMonthlyReports(startupId = null) {
+    if (isSupabaseConfigured && supabase && !isTableMissing('monthly_progress_reports')) {
+      try {
+        let query = supabase
+          .from('monthly_progress_reports')
+          .select('*')
+          .order('report_month', { ascending: false });
+        if (startupId) query = query.eq('startup_id', startupId);
+        const { data, error } = await query;
+        if (!error && Array.isArray(data)) return data;
+        if (error) {
+          if (error.code === '42P01' || /does not exist|schema cache/i.test(error.message || '')) {
+            markTableMissing('monthly_progress_reports');
+          }
+        }
+      } catch (err) {
+        markTableMissing('monthly_progress_reports');
+      }
+    }
+    const cached = typeof localStorage !== 'undefined' ? localStorage.getItem('vb_monthly_reports_cache') : null;
+    let list = cached ? JSON.parse(cached) : [];
+    if (startupId) list = list.filter((r) => r.startup_id === startupId);
+    return list.sort((a, b) => (a.report_month < b.report_month ? 1 : -1));
+  },
+
+  async saveMonthlyReport(report) {
+    const payload = { ...report, updated_at: new Date().toISOString() };
+    if (isSupabaseConfigured && supabase && !isTableMissing('monthly_progress_reports')) {
+      try {
+        const { id, ...fields } = payload;
+        const query = id && !id.startsWith('mpr_')
+          ? supabase.from('monthly_progress_reports').update(fields).eq('id', id)
+          : supabase.from('monthly_progress_reports').upsert([fields], { onConflict: 'startup_id,report_month' });
+        const { data, error } = await query.select().single();
+        if (!error && data) return { success: true, report: data };
+        if (error) {
+          if (error.code === '42P01' || /does not exist|schema cache/i.test(error.message || '')) {
+            markTableMissing('monthly_progress_reports');
+          }
+        }
+      } catch (err) {
+        markTableMissing('monthly_progress_reports');
+      }
+    }
+    const current = await this.getMonthlyReports();
+    const existing = current.find(
+      (r) => (payload.id && r.id === payload.id) || (r.startup_id === payload.startup_id && r.report_month === payload.report_month)
+    );
+    const saved = existing
+      ? { ...existing, ...payload, id: existing.id }
+      : { ...payload, id: 'mpr_' + Date.now(), created_at: new Date().toISOString() };
+    const updated = [saved, ...current.filter((r) => r.id !== saved.id)];
+    localStorage.setItem('vb_monthly_reports_cache', JSON.stringify(updated));
+    return { success: true, report: saved, isLocal: true };
+  },
+
+  async deleteMonthlyReport(id) {
+    if (isSupabaseConfigured && supabase && id && !id.startsWith('mpr_') && !isTableMissing('monthly_progress_reports')) {
+      try {
+        const { error } = await supabase.from('monthly_progress_reports').delete().eq('id', id);
+        if (!error) return { success: true };
+      } catch (err) {
+        markTableMissing('monthly_progress_reports');
+      }
+    }
+    const current = await this.getMonthlyReports();
+    localStorage.setItem('vb_monthly_reports_cache', JSON.stringify(current.filter((r) => r.id !== id)));
+    return { success: true };
+  },
+
+  // ================= 6C. MILESTONE TASKS & PROGRESS VERIFICATION =================
+  // Supabase is the source of truth (see supabase/migration_milestone_and_progress.sql). The local branch
+  // gracefully activates when tables are unmigrated or Supabase is offline.
+  async getMilestoneProgram() {
+    if (isSupabaseConfigured && supabase && !isTableMissing('milestone_stages')) {
+      try {
+        const [stagesRes, tasksRes] = await Promise.all([
+          supabase.from('milestone_stages').select('*').order('stage_order', { ascending: true }),
+          supabase.from('milestone_tasks').select('*').eq('is_active', true).order('sort_order', { ascending: true })
+        ]);
+        if (!stagesRes.error && !tasksRes.error && stagesRes.data?.length > 0) {
+          return { stages: stagesRes.data || [], tasks: tasksRes.data || [] };
+        }
+        if (stagesRes.error || tasksRes.error) {
+          const err = stagesRes.error || tasksRes.error;
+          if (err.code === '42P01' || /does not exist|schema cache/i.test(err.message || '')) {
+            markTableMissing('milestone_stages');
+            markTableMissing('milestone_tasks');
+          }
+        }
+      } catch (err) {
+        markTableMissing('milestone_stages');
+        markTableMissing('milestone_tasks');
+      }
+    }
+    return { stages: LOCAL_MILESTONE_STAGES, tasks: LOCAL_MILESTONE_TASKS };
+  },
+
+  async getTaskSubmissions(startupId = null) {
+    if (isSupabaseConfigured && supabase && !isTableMissing('task_submissions')) {
+      try {
+        let query = supabase.from('task_submissions').select('*').order('updated_at', { ascending: false });
+        if (startupId) query = query.eq('startup_id', startupId);
+        const { data, error } = await query;
+        if (!error && Array.isArray(data)) return data;
+        if (error) {
+          if (error.code === '42P01' || /does not exist|schema cache/i.test(error.message || '')) {
+            markTableMissing('task_submissions');
+          }
+        }
+      } catch (err) {
+        markTableMissing('task_submissions');
+      }
+    }
+    const list = readLocalList('vb_task_submissions_cache');
+    return startupId ? list.filter((s) => s.startup_id === startupId) : list;
+  },
+
+  async getTaskSubmissionEvents(submissionId) {
+    if (!submissionId || submissionId.startsWith('tsub_') || isTableMissing('task_submission_events')) {
+      return readLocalList('vb_task_events_cache').filter((e) => e.submission_id === submissionId);
+    }
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { data, error } = await supabase
+          .from('task_submission_events')
+          .select('*')
+          .eq('submission_id', submissionId)
+          .order('created_at', { ascending: true });
+        if (!error && Array.isArray(data)) return data;
+        if (error) {
+          if (error.code === '42P01' || /does not exist|schema cache/i.test(error.message || '')) {
+            markTableMissing('task_submission_events');
+          }
+        }
+      } catch (err) {
+        markTableMissing('task_submission_events');
+      }
+    }
+    return readLocalList('vb_task_events_cache').filter((e) => e.submission_id === submissionId);
+  },
+
+  // Founder: save a draft ('In Progress') or submit ('Submitted for Review'). One row per startup + task.
+  async saveTaskSubmission({ id, startup_id, task_id, status, completion_description, completion_date, evidence_path, evidence_name, founder_remarks }) {
+    const fields = {
+      status,
+      completion_description: completion_description?.trim() || null,
+      completion_date: completion_date || null,
+      founder_remarks: founder_remarks?.trim() || null,
+      ...(evidence_path !== undefined ? { evidence_path, evidence_name: evidence_name || null } : {})
+    };
+    if (isSupabaseConfigured && supabase && !isTableMissing('task_submissions')) {
+      try {
+        const query = id && !id.startsWith('tsub_')
+          ? supabase.from('task_submissions').update(fields).eq('id', id)
+          : supabase.from('task_submissions').insert([{ startup_id, task_id, ...fields }]);
+        const { data, error } = await query.select().single();
+        if (!error && data) return { success: true, submission: data };
+        if (error) {
+          if (error.code === '42P01' || /does not exist|schema cache/i.test(error.message || '')) {
+            markTableMissing('task_submissions');
+          }
+        }
+      } catch (err) {
+        markTableMissing('task_submissions');
+      }
+    }
+
+    // Local preview: same rules as the database trigger
+    const list = readLocalList('vb_task_submissions_cache');
+    const existing = list.find((s) => (id && s.id === id) || (s.startup_id === startup_id && s.task_id === task_id));
+    if (existing?.status === 'Verified by Admin') throw new Error('This activity has been verified and can no longer be edited.');
+    if (!['In Progress', 'Submitted for Review'].includes(status)) throw new Error('Founders can only save a draft or submit for review.');
+    const now = new Date().toISOString();
+    const becomesSubmitted = status === 'Submitted for Review' && existing?.status !== 'Submitted for Review';
+    if (becomesSubmitted && (!fields.completion_description || !fields.completion_date)) {
+      throw new Error('A completion description and date are required before submitting.');
+    }
+    const row = {
+      ...(existing || { id: 'tsub_' + Date.now(), startup_id, task_id, created_at: now, submission_count: 0, reviewed_at: null, reviewed_by: null, admin_remarks: null }),
+      ...fields,
+      updated_at: now,
+      submitted_by: 'local-founder'
+    };
+    if (becomesSubmitted) {
+      row.submitted_at = now;
+      row.submission_count = (row.submission_count || 0) + 1;
+      row.reporting_month = now.slice(0, 7) + '-01';
+    }
+    writeLocalList('vb_task_submissions_cache', [row, ...list.filter((s) => s.id !== row.id)]);
+    if (!existing || existing.status !== row.status || existing.submission_count !== row.submission_count) {
+      logLocalTaskEvent(row, 'founder');
+    }
+    return { success: true, submission: row, isLocal: true };
+  },
+
+  // Admin: verify or request changes. Reviewer id and timestamp are set by the database trigger.
+  async reviewTaskSubmission(id, { status, admin_remarks }) {
+    if (!['Verified by Admin', 'Changes Requested'].includes(status)) throw new Error('Unknown review decision.');
+    if (status === 'Changes Requested' && !admin_remarks?.trim()) throw new Error('Please give a reason when requesting changes.');
+    if (isSupabaseConfigured && supabase && id && !id.startsWith('tsub_') && !isTableMissing('task_submissions')) {
+      try {
+        const { data, error } = await supabase
+          .from('task_submissions')
+          .update({ status, admin_remarks: admin_remarks?.trim() || null })
+          .eq('id', id)
+          .select()
+          .single();
+        if (!error && data) return { success: true, submission: data };
+        if (error) {
+          if (error.code === '42P01' || /does not exist|schema cache/i.test(error.message || '')) {
+            markTableMissing('task_submissions');
+          }
+        }
+      } catch (err) {
+        markTableMissing('task_submissions');
+      }
+    }
+    const list = readLocalList('vb_task_submissions_cache');
+    const existing = list.find((s) => s.id === id);
+    if (!existing) throw new Error('Submission not found.');
+    if (!['Submitted for Review', 'Verified by Admin', 'Changes Requested'].includes(existing.status)) {
+      throw new Error('Only submitted activities can be reviewed.');
+    }
+    const now = new Date().toISOString();
+    const row = { ...existing, status, admin_remarks: admin_remarks?.trim() || null, reviewed_at: now, reviewed_by: 'local-admin', updated_at: now };
+    writeLocalList('vb_task_submissions_cache', list.map((s) => (s.id === id ? row : s)));
+    logLocalTaskEvent(row, 'admin');
+    return { success: true, submission: row };
+  },
+
+  async uploadProgressEvidence(startupId, taskId, file) {
+    const allowed = ['application/pdf', 'image/png', 'image/jpeg', 'image/webp'];
+    if (!allowed.includes(file.type)) throw new Error('Upload a PDF, PNG, JPG or WEBP file.');
+    if (file.size > 10 * 1024 * 1024) throw new Error('Files must be 10 MB or smaller.');
+    const safeName = file.name.replace(/[^a-zA-Z0-9._-]+/g, '_').slice(-80);
+    const path = `${startupId}/${taskId}/${Date.now()}-${safeName}`;
+    if (isSupabaseConfigured && supabase) {
+      const { error } = await supabase.storage.from('progress-evidence').upload(path, file, { upsert: false, contentType: file.type });
+      if (error) throw new Error(error.message);
+      return { path, name: file.name };
+    }
+    return { path: 'local/' + path, name: file.name };
+  },
+
+  // Private bucket: documents are only reachable through short-lived signed URLs
+  async getProgressEvidenceUrl(path) {
+    if (!path) return null;
+    if (isSupabaseConfigured && supabase) {
+      const { data, error } = await supabase.storage.from('progress-evidence').createSignedUrl(path, 600);
+      if (error) throw new Error(error.message);
+      return data?.signedUrl || null;
+    }
+    return null;
+  },
+
+  // Live updates: Supabase Realtime (RLS-filtered), or a browser event in local preview
+  subscribeToTaskSubmissions(onChange) {
+    if (isSupabaseConfigured && supabase) {
+      const channel = supabase
+        .channel('task-submissions-' + Math.random().toString(36).slice(2))
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'task_submissions' }, () => onChange())
+        .subscribe();
+      return () => supabase.removeChannel(channel);
+    }
+    if (typeof window === 'undefined') return () => {};
+    const handler = (e) => {
+      if (!e.key || e.key === 'vb_task_submissions_cache') onChange();
+    };
+    window.addEventListener('storage', handler);
+    window.addEventListener('vb-task-submissions-changed', handler);
+    return () => {
+      window.removeEventListener('storage', handler);
+      window.removeEventListener('vb-task-submissions-changed', handler);
+    };
+  },
+
+  // ================= 6B. MENTOR APPOINTMENTS & SESSIONS =================
+  async getMentorBookings(startupId = null) {
+    if (isSupabaseConfigured && supabase) {
+      try {
+        let query = supabase.from('mentor_bookings').select('*').order('created_at', { ascending: false });
+        if (startupId) query = query.eq('startup_id', startupId);
+        const { data, error } = await query;
+        if (!error && Array.isArray(data) && data.length > 0) return data;
+      } catch (err) {
+        console.warn('Error reading mentor_bookings:', err.message);
+      }
+    }
+    const cached = typeof localStorage !== 'undefined' ? localStorage.getItem('vb_mentor_bookings_cache') : null;
+    let list = cached ? JSON.parse(cached) : MOCK_MENTOR_BOOKINGS;
+    if (startupId) list = list.filter((b) => b.startup_id === startupId || b.startup_name === startupId);
+    return list;
+  },
+
+  async createMentorBooking(bookingData) {
+    const refNum = 'VB-MB-' + Math.floor(100 + Math.random() * 900);
+    const fullBooking = {
+      reference_number: refNum,
+      status: 'Requested',
+      ...bookingData
+    };
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        let realStartupId = bookingData.startup_id;
+        const { data: authData } = await supabase.auth.getUser();
+        if (authData?.user) {
+          const { data: startupRow } = await supabase
+            .from('startups')
+            .select('id, startup_name, founder_name, founder_email')
+            .or(`profile_id.eq.${authData.user.id},founder_email.eq.${authData.user.email}`)
+            .maybeSingle();
+
+          if (startupRow) {
+            realStartupId = startupRow.id;
+            fullBooking.startup_name = fullBooking.startup_name || startupRow.startup_name;
+            fullBooking.founder_name = fullBooking.founder_name || startupRow.founder_name;
+            fullBooking.founder_email = fullBooking.founder_email || startupRow.founder_email || authData.user.email;
+          } else if (realStartupId && !realStartupId.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
+            realStartupId = null;
+          }
+        } else if (realStartupId && !realStartupId.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
+          realStartupId = null;
+        }
+
+        fullBooking.startup_id = realStartupId;
+
+        const { data, error } = await supabase
+          .from('mentor_bookings')
+          .insert([fullBooking])
+          .select()
+          .single();
+
+        if (error) throw error;
+        return { success: true, booking: data };
+      } catch (err) {
+        console.warn('[Supabase Fallback] createMentorBooking failed, saving to local cache:', err.message);
+        const current = await this.getMentorBookings();
+        const newEntry = {
+          id: 'mb_' + Date.now(),
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          ...fullBooking
+        };
+        const updated = [newEntry, ...current];
+        if (typeof localStorage !== 'undefined') {
+          localStorage.setItem('vb_mentor_bookings_cache', JSON.stringify(updated));
+        }
+        return { success: true, booking: newEntry, isLocal: true };
+      }
+    }
+
+    const current = await this.getMentorBookings();
+    const newEntry = {
+      id: 'mb_' + Date.now(),
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      ...fullBooking
+    };
+    const updated = [newEntry, ...current];
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('vb_mentor_bookings_cache', JSON.stringify(updated));
+    }
+    return { success: true, booking: newEntry };
+  },
+
+  async updateMentorBookingStatus(id, newStatus, adminNotes = '', meetingLink = '') {
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { data, error } = await supabase
+          .from('mentor_bookings')
+          .update({
+            status: newStatus,
+            admin_notes: adminNotes,
+            meeting_link: meetingLink || null,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', id)
+          .select()
+          .single();
+        if (error) throw error;
+        return { success: true, booking: data };
+      } catch (err) {
+        console.warn('[Supabase Fallback] updateMentorBookingStatus failed, updating local cache:', err.message);
+      }
+    }
+    const current = await this.getMentorBookings();
+    const updated = current.map((b) =>
+      b.id === id ? {
+        ...b,
+        status: newStatus,
+        admin_notes: adminNotes || b.admin_notes,
+        meeting_link: meetingLink || b.meeting_link,
+        updated_at: new Date().toISOString()
+      } : b
+    );
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('vb_mentor_bookings_cache', JSON.stringify(updated));
+    }
+    return { success: true, booking: updated.find((b) => b.id === id) };
   },
 
   // ================= 7. EXTENDED INTAKE & APPLICATION ACTIONS =================

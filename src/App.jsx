@@ -178,7 +178,7 @@ export default function App() {
   // ================= LOADING STATE: PREVENT FLASH OF PROTECTED CONTENT =================
   if (authChecking) {
     return (
-      <div className="h-screen w-screen bg-[#FDFBF7] flex flex-col font-sans selection:bg-emerald-600 selection:text-white">
+      <div className="h-screen w-screen bg-[#FDFBF7] flex flex-col font-legacy selection:bg-emerald-600 selection:text-white">
         <div className="w-full h-[3px] bg-gradient-to-r from-orange-500 via-amber-400 to-emerald-600 shrink-0" />
         <div className="flex-1 flex flex-col items-center justify-center p-6 text-center space-y-4">
           <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-600 to-teal-700 flex items-center justify-center font-black text-white shadow-md text-base">
@@ -188,7 +188,7 @@ export default function App() {
             <h2 className="text-base font-bold text-slate-900 tracking-tight">
               VentureBharat Incubation Portal
             </h2>
-            <p className="text-xs text-slate-500 mt-1 flex items-center justify-center space-x-1.5">
+            <p className="text-[0.75rem]/4 text-slate-500 mt-1 flex items-center justify-center space-x-1.5">
               <Loader2 className="w-3.5 h-3.5 text-emerald-600 animate-spin" />
               <span>Verifying secure portal authorization &amp; credentials...</span>
             </p>
@@ -224,7 +224,7 @@ export default function App() {
 
   // ================= RENDER DUAL GATEWAY LOGIN PAGE =================
   return (
-    <div className="min-h-screen lg:h-screen lg:max-h-screen bg-[#FDFBF7] text-slate-800 flex flex-col selection:bg-emerald-100 selection:text-emerald-950 overflow-x-hidden lg:overflow-hidden">
+    <div className="min-h-screen lg:h-screen lg:max-h-screen bg-[#FDFBF7] text-slate-800 flex flex-col font-legacy selection:bg-emerald-100 selection:text-emerald-950 overflow-x-hidden lg:overflow-hidden">
       {/* Top Navigation */}
       <Navbar
         onOpenRegister={() => setIsRegisterOpen(true)}
@@ -260,7 +260,7 @@ export default function App() {
                     <span>Secure Access</span>
                   </span>
                 </div>
-                <p className="text-xs text-slate-500 mt-0.5">
+                <p className="text-[0.75rem]/4 text-slate-500 mt-0.5">
                   National Innovation &amp; Incubation Management Platform
                 </p>
               </div>
@@ -273,7 +273,7 @@ export default function App() {
 
               {/* Notification Message */}
               {successMsg && (
-                <div className="mb-3 p-2 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center space-x-2 text-xs text-emerald-800">
+                <div className="mb-3 p-2 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center space-x-2 text-[0.75rem]/4 text-emerald-800">
                   <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                   <span>{successMsg}</span>
                 </div>
@@ -293,7 +293,7 @@ export default function App() {
               />
 
               {/* Registration Prompt Link */}
-              <div className="mt-3.5 pt-3 text-center border-t border-slate-100 text-xs text-slate-500">
+              <div className="mt-3.5 pt-3 text-center border-t border-slate-100 text-[0.75rem]/4 text-slate-500">
                 <span>New innovation venture? </span>
                 <button
                   type="button"

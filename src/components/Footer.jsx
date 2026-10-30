@@ -6,7 +6,7 @@ export default function Footer() {
     <footer className="w-full bg-white border-t border-[#E7ECE5] text-slate-500 py-2.5 px-4 sm:px-6 lg:px-8 mt-auto shrink-0">
       <div className="max-w-[1400px] mx-auto">
         {/* National Ecosystem Badges */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 pb-2 border-b border-slate-100 text-xs">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 pb-2 border-b border-slate-100 text-[0.75rem]/4">
           <div className="flex items-center space-x-2">
             <div className="w-6 h-6 rounded-md bg-emerald-50 flex items-center justify-center text-emerald-700 shrink-0">
               <Landmark className="w-3.5 h-3.5" />

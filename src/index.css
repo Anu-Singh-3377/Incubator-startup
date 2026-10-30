@@ -2,9 +2,122 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ================= DESIGN TOKENS ================= */
+:root {
+  --vb-primary: #059669;
+  --vb-primary-strong: #047857;
+  --vb-primary-soft: #ecfdf5;
+  --vb-accent: #f97316;
+  --vb-surface: #ffffff;
+  --vb-canvas: #f6f8fb;
+  --vb-border: #e2e8f0;
+  --vb-text: #0f172a;
+  --vb-text-muted: #475569;
+  --vb-focus: #10b981;
+  --vb-radius-card: 0.875rem;
+  --vb-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
 @layer base {
   body {
-    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-family: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif;
+  }
+
+  /* Login screen keeps its original typography */
+  .font-legacy :is(h1, h2, h3) {
+    font-family: inherit;
+  }
+
+  /* Visible keyboard focus for every clickable control */
+  :where(button, a, [role='button'], [tabindex]):focus-visible {
+    outline: 2px solid var(--vb-focus);
+    outline-offset: 2px;
+    border-radius: 0.5rem;
+  }
+
+  :where(button):not(:disabled) {
+    cursor: pointer;
+  }
+
+  :where(button, input, select, textarea):disabled {
+    cursor: not-allowed;
+  }
+
+  :where(button):not(:disabled):active {
+    transform: translateY(1px);
+  }
+
+  :where(button, a) {
+    transition-property: color, background-color, border-color, box-shadow, opacity, transform;
+    transition-duration: 150ms;
+    transition-timing-function: var(--vb-ease);
+  }
+
+  :where(input, select, textarea) {
+    transition: border-color 150ms var(--vb-ease), box-shadow 150ms var(--vb-ease), background-color 150ms var(--vb-ease);
+  }
+
+  :where(input, textarea)::placeholder {
+    color: #94a3b8;
+    opacity: 1;
+  }
+
+  /* Table readability: tabular figures and row hover */
+  :where(table) {
+    font-variant-numeric: tabular-nums;
+  }
+
+  :where(tbody tr) {
+    transition: background-color 150ms var(--vb-ease);
+  }
+
+  :where(tbody tr):hover {
+    background-color: #f8fafc;
+  }
+
+  ::selection {
+    background-color: #a7f3d0;
+    color: #064e3b;
+  }
+}
+
+/* ================= MODALS: consistent entrance ================= */
+.fixed.inset-0.z-50 {
+  animation: vb-fade-in 160ms var(--vb-ease);
+}
+
+.fixed.inset-0.z-50 > * {
+  animation: vb-pop-in 200ms var(--vb-ease);
+}
+
+@keyframes vb-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes vb-pop-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+
+/* Dropdowns and popovers anchored with absolute + mt-2 */
+.vb-pop {
+  animation: vb-pop-in 160ms var(--vb-ease);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }
 
@@ -33,20 +146,22 @@
 
 /* Custom scrollbars */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #f4f6f3;
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #cbd5ce;
-  border-radius: 4px;
+  background: #cbd5e1;
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #aebcb2;
+  background: #94a3b8;
+  background-clip: content-box;
 }
-

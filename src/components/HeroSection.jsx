@@ -38,14 +38,14 @@ export default function HeroSection({ stats, onOpenRegister }) {
       {/* Bottom Content Area */}
       <div className="p-4 sm:p-6 lg:p-6 text-white mt-auto">
         <div className="max-w-xl">
-          <p className="mb-1.5 text-[11px] sm:text-xs font-semibold uppercase tracking-[0.14em] text-emerald-300 flex items-center gap-1.5">
+          <p className="mb-1.5 text-[11px] sm:text-[0.75rem]/4 font-semibold uppercase tracking-[0.14em] text-emerald-300 flex items-center gap-1.5">
             <TrendingUp className="w-3.5 h-3.5 text-emerald-400" />
             <span>Catalyzing Indian Innovation &amp; DeepTech</span>
           </p>
           <h1 className="text-xl sm:text-2xl lg:text-[1.85rem] font-bold leading-snug tracking-tight text-white">
             Empowering visionary founders to build world-class ventures.
           </h1>
-          <p className="mt-2 text-xs sm:text-[13px] leading-relaxed text-slate-200/90 max-w-lg line-clamp-2 sm:line-clamp-none">
+          <p className="mt-2 text-[0.75rem]/4 sm:text-[13px] leading-relaxed text-slate-200/90 max-w-lg line-clamp-2 sm:line-clamp-none">
             State-of-the-art incubation labs, non-dilutive seed grants, and strategic mentorship under national innovation frameworks.
           </p>
 
@@ -72,7 +72,7 @@ export default function HeroSection({ stats, onOpenRegister }) {
           </div>
 
           {/* Action Link */}
-          <div className="mt-3.5 pt-2.5 flex items-center justify-between border-t border-white/10 text-xs">
+          <div className="mt-3.5 pt-2.5 flex items-center justify-between border-t border-white/10 text-[0.75rem]/4">
             <button
               type="button"
               onClick={onOpenRegister}

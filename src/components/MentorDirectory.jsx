@@ -36,12 +36,28 @@ export default function MentorDirectory({ isAdmin = false, currentUser }) {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(9);
 
+  // Tabs: 'directory' | 'bookings'
+  const [activeTab, setActiveTab] = useState('directory');
+  const [bookings, setBookings] = useState([]);
+
   // Modals
   const [selectedMentor, setSelectedMentor] = useState(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [officeHoursModal, setOfficeHoursModal] = useState(null);
   const [officeHoursSent, setOfficeHoursSent] = useState(false);
+  const [officeHoursRef, setOfficeHoursRef] = useState('');
+  const [bookingTopic, setBookingTopic] = useState('');
+  const [bookingDate, setBookingDate] = useState(new Date(Date.now() + 86400000 * 2).toISOString().split('T')[0]);
+  const [bookingTimeWindow, setBookingTimeWindow] = useState('Morning (10 AM - 1 PM)');
+  const [bookingMode, setBookingMode] = useState('Virtual Video Conference');
+  const [submittingBooking, setSubmittingBooking] = useState(false);
+
+  // Admin action modal on booking
+  const [selectedBookingForAction, setSelectedBookingForAction] = useState(null);
+  const [actionMeetingLink, setActionMeetingLink] = useState('');
+  const [actionNotes, setActionNotes] = useState('');
+  const [actionSubmitting, setActionSubmitting] = useState(false);
 
   // Form State
   const [formData, setFormData] = useState({
@@ -76,9 +92,20 @@ export default function MentorDirectory({ isAdmin = false, currentUser }) {
     }
   };
 
+  const loadBookings = async () => {
+    try {
+      const startupId = !isAdmin ? currentUser?.startup_id || currentUser?.id : null;
+      const data = await supabaseService.getMentorBookings(startupId);
+      setBookings(data || []);
+    } catch (err) {
+      console.warn('Failed to load mentor bookings:', err);
+    }
+  };
+
   useEffect(() => {
     loadMentors();
-  }, []);
+    loadBookings();
+  }, [currentUser?.id]);
 
   const validate = () => {
     const errs = {};
@@ -171,13 +198,50 @@ export default function MentorDirectory({ isAdmin = false, currentUser }) {
     }
   };
 
-  const handleRequestOfficeHours = (e) => {
+  const handleRequestOfficeHours = async (e) => {
     e.preventDefault();
-    setOfficeHoursSent(true);
-    setTimeout(() => {
-      setOfficeHoursSent(false);
-      setOfficeHoursModal(null);
-    }, 2000);
+    if (!bookingTopic.trim()) {
+      alert('Please specify the topic or challenge for discussion.');
+      return;
+    }
+    setSubmittingBooking(true);
+    try {
+      const res = await supabaseService.createMentorBooking({
+        mentor_id: officeHoursModal.id,
+        mentor_name: officeHoursModal.full_name,
+        mentor_organization: officeHoursModal.organization,
+        startup_id: currentUser?.startup_id || currentUser?.id,
+        startup_name: currentUser?.startup_name || 'Agri',
+        founder_name: currentUser?.full_name || 'Founder',
+        founder_email: currentUser?.email || 'founder@venturebharat.in',
+        topic: bookingTopic.trim(),
+        preferred_date: bookingDate || new Date(Date.now() + 86400000 * 2).toISOString().split('T')[0],
+        preferred_time_window: bookingTimeWindow,
+        preferred_mode: bookingMode
+      });
+      setOfficeHoursRef(res.booking?.reference_number || 'VB-MB-NEW');
+      setOfficeHoursSent(true);
+      await loadBookings();
+    } catch (err) {
+      alert('Error requesting advisory session: ' + err.message);
+    } finally {
+      setSubmittingBooking(false);
+    }
+  };
+
+  const handleUpdateBookingStatus = async (bookingId, newStatus, notes = '', link = '') => {
+    setActionSubmitting(true);
+    try {
+      await supabaseService.updateMentorBookingStatus(bookingId, newStatus, notes, link);
+      setSelectedBookingForAction(null);
+      setActionMeetingLink('');
+      setActionNotes('');
+      await loadBookings();
+    } catch (err) {
+      alert('Error updating booking: ' + err.message);
+    } finally {
+      setActionSubmitting(false);
+    }
   };
 
   // Filtered List
@@ -240,41 +304,76 @@ export default function MentorDirectory({ isAdmin = false, currentUser }) {
         )}
       </div>
 
-      {/* Metrics Row */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <div className="p-4 rounded-xl bg-white border border-slate-200/90 shadow-xs">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Total Mentors</p>
-          <p className="text-2xl font-black text-slate-900 mt-1">{mentors.length}</p>
-          <p className="text-[11px] text-slate-400 mt-0.5">Empanelled advisors</p>
-        </div>
-        <div className="p-4 rounded-xl bg-white border border-slate-200/90 shadow-xs">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Active Advisors</p>
-          <p className="text-2xl font-black text-emerald-700 mt-1">
-            {mentors.filter((m) => m.status === 'Active').length}
-          </p>
-          <p className="text-[11px] text-slate-400 mt-0.5">Accepting cohort 1:1s</p>
-        </div>
-        <div className="p-4 rounded-xl bg-white border border-slate-200/90 shadow-xs">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">IP &amp; Regulatory</p>
-          <p className="text-2xl font-black text-blue-700 mt-1">
-            {mentors.filter((m) => m.areas_of_expertise?.includes('IPR') || m.areas_of_expertise?.includes('Regulatory')).length}
-          </p>
-          <p className="text-[11px] text-slate-400 mt-0.5">Patents &amp; CDSCO / MCA</p>
-        </div>
-        <div className="p-4 rounded-xl bg-white border border-slate-200/90 shadow-xs">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Fundraising Mentors</p>
-          <p className="text-2xl font-black text-amber-700 mt-1">
-            {mentors.filter((m) => m.areas_of_expertise?.includes('Fundraising') || m.areas_of_expertise?.includes('Finance')).length}
-          </p>
-          <p className="text-[11px] text-slate-400 mt-0.5">Seed &amp; Series-A prep</p>
-        </div>
+      {/* Sub-Tabs: Empanelled Directory vs Bookings */}
+      <div className="flex items-center space-x-2 border-b border-slate-200">
+        <button
+          onClick={() => setActiveTab('directory')}
+          className={`pb-3 px-4 text-xs font-bold border-b-2 transition flex items-center space-x-2 ${
+            activeTab === 'directory'
+              ? 'border-emerald-600 text-emerald-800'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <Users className="w-4 h-4" />
+          <span>Empanelled Mentors ({mentors.length})</span>
+        </button>
+        <button
+          onClick={() => setActiveTab('bookings')}
+          className={`pb-3 px-4 text-xs font-bold border-b-2 transition flex items-center space-x-2 ${
+            activeTab === 'bookings'
+              ? 'border-emerald-600 text-emerald-800'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <Calendar className="w-4 h-4" />
+          <span>{isAdmin ? 'Advisory Sessions & Bookings' : 'My Booked Advisory Sessions'}</span>
+          <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+            bookings.filter((b) => b.status === 'Requested').length > 0
+              ? 'bg-amber-100 text-amber-800 animate-pulse'
+              : 'bg-slate-100 text-slate-600'
+          }`}>
+            {bookings.length}
+          </span>
+        </button>
       </div>
+
+      {activeTab === 'directory' ? (
+        <>
+          {/* Metrics Row */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div className="p-4 rounded-xl bg-white border border-slate-200/90 shadow-xs">
+              <p className="text-[12px] font-semibold uppercase tracking-wider text-slate-500">Total Mentors</p>
+              <p className="text-2xl font-black text-slate-900 mt-1">{mentors.length}</p>
+              <p className="text-[12px] text-slate-500 mt-0.5">Empanelled advisors</p>
+            </div>
+            <div className="p-4 rounded-xl bg-white border border-slate-200/90 shadow-xs">
+              <p className="text-[12px] font-semibold uppercase tracking-wider text-slate-500">Active Advisors</p>
+              <p className="text-2xl font-black text-emerald-700 mt-1">
+                {mentors.filter((m) => m.status === 'Active').length}
+              </p>
+              <p className="text-[12px] text-slate-500 mt-0.5">Accepting cohort 1:1s</p>
+            </div>
+            <div className="p-4 rounded-xl bg-white border border-slate-200/90 shadow-xs">
+              <p className="text-[12px] font-semibold uppercase tracking-wider text-slate-500">IP &amp; Regulatory</p>
+              <p className="text-2xl font-black text-blue-700 mt-1">
+                {mentors.filter((m) => m.areas_of_expertise?.includes('IPR') || m.areas_of_expertise?.includes('Regulatory')).length}
+              </p>
+              <p className="text-[12px] text-slate-500 mt-0.5">Patents &amp; CDSCO / MCA</p>
+            </div>
+            <div className="p-4 rounded-xl bg-white border border-slate-200/90 shadow-xs">
+              <p className="text-[12px] font-semibold uppercase tracking-wider text-slate-500">Fundraising Mentors</p>
+              <p className="text-2xl font-black text-amber-700 mt-1">
+                {mentors.filter((m) => m.areas_of_expertise?.includes('Fundraising') || m.areas_of_expertise?.includes('Finance')).length}
+              </p>
+              <p className="text-[12px] text-slate-500 mt-0.5">Seed &amp; Series-A prep</p>
+            </div>
+          </div>
 
       {/* Search & Filter Toolbar */}
       <div className="p-4 rounded-xl bg-white border border-slate-200/90 shadow-xs flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
         {/* Search */}
         <div className="relative flex-1">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+          <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             value={searchTerm}
@@ -380,14 +479,14 @@ export default function MentorDirectory({ isAdmin = false, currentUser }) {
                       <p className="text-xs text-slate-600 font-medium truncate max-w-[180px]">
                         {mentor.designation}
                       </p>
-                      <p className="text-[11px] text-slate-400 truncate max-w-[180px]">
+                      <p className="text-[12px] text-slate-500 truncate max-w-[180px]">
                         {mentor.organization}
                       </p>
                     </div>
                   </div>
 
                   <span
-                    className={`px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0 ${
+                    className={`px-2 py-0.5 rounded-full text-[11px] font-bold shrink-0 ${
                       mentor.status === 'Active'
                         ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                         : mentor.status === 'On Leave'
@@ -401,7 +500,7 @@ export default function MentorDirectory({ isAdmin = false, currentUser }) {
 
                 {/* Primary Expertise Tag */}
                 <div className="mb-3">
-                  <span className="inline-block px-2.5 py-1 rounded-md text-[11px] font-semibold bg-emerald-50/80 text-emerald-800 border border-emerald-100">
+                  <span className="inline-block px-2.5 py-1 rounded-md text-[12px] font-semibold bg-emerald-50/80 text-emerald-800 border border-emerald-100">
                     {mentor.areas_of_expertise}
                   </span>
                 </div>
@@ -417,7 +516,7 @@ export default function MentorDirectory({ isAdmin = false, currentUser }) {
                     {mentor.industry_skills.split(',').slice(0, 3).map((sk, idx) => (
                       <span
                         key={idx}
-                        className="px-2 py-0.5 rounded bg-slate-100 text-[10px] font-medium text-slate-600"
+                        className="px-2 py-0.5 rounded bg-slate-100 text-[11px] font-medium text-slate-600"
                       >
                         {sk.trim()}
                       </span>
@@ -426,20 +525,20 @@ export default function MentorDirectory({ isAdmin = false, currentUser }) {
                 )}
 
                 {/* Availability & Format */}
-                <div className="pt-3 border-t border-slate-100 grid grid-cols-2 gap-2 text-[11px] text-slate-500">
+                <div className="pt-3 border-t border-slate-100 grid grid-cols-2 gap-2 text-[12px] text-slate-500">
                   <div className="flex items-center space-x-1.5 truncate">
-                    <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                    <Clock className="w-3.5 h-3.5 text-slate-500 shrink-0" />
                     <span className="truncate">{mentor.availability}</span>
                   </div>
                   <div className="flex items-center space-x-1.5 truncate">
-                    <Calendar className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                    <Calendar className="w-3.5 h-3.5 text-slate-500 shrink-0" />
                     <span className="truncate">{mentor.mentoring_format}</span>
                   </div>
                 </div>
 
                 {/* Internal notes banner for Admin */}
                 {isAdmin && mentor.internal_notes && (
-                  <div className="mt-3 p-2 bg-amber-50/80 border border-amber-200/70 rounded-lg text-[11px] text-amber-900 leading-tight">
+                  <div className="mt-3 p-2 bg-amber-50/80 border border-amber-200/70 rounded-lg text-[12px] text-amber-900 leading-tight">
                     <span className="font-bold">Staff Note: </span>
                     <span className="line-clamp-2">{mentor.internal_notes}</span>
                   </div>
@@ -454,7 +553,7 @@ export default function MentorDirectory({ isAdmin = false, currentUser }) {
                       href={mentor.linkedin_url}
                       target="_blank"
                       rel="noreferrer"
-                      className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-white transition border border-transparent hover:border-slate-200"
+                      className="p-1.5 rounded-lg text-slate-500 hover:text-blue-600 hover:bg-white transition border border-transparent hover:border-slate-200"
                       title="LinkedIn Profile"
                     >
                       <Linkedin className="w-3.5 h-3.5" />
@@ -463,7 +562,7 @@ export default function MentorDirectory({ isAdmin = false, currentUser }) {
                   {mentor.email && (
                     <a
                       href={`mailto:${mentor.email}`}
-                      className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-700 hover:bg-white transition border border-transparent hover:border-slate-200"
+                      className="p-1.5 rounded-lg text-slate-500 hover:text-emerald-700 hover:bg-white transition border border-transparent hover:border-slate-200"
                       title={mentor.email}
                     >
                       <Mail className="w-3.5 h-3.5" />
@@ -497,7 +596,7 @@ export default function MentorDirectory({ isAdmin = false, currentUser }) {
                       </button>
                       <button
                         onClick={() => handleDelete(mentor.id, mentor.full_name)}
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition"
+                        className="p-1.5 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-rose-50 transition"
                         title="Delete Mentor"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -539,6 +638,228 @@ export default function MentorDirectory({ isAdmin = false, currentUser }) {
           </div>
         </div>
       )}
+      </>
+      ) : (
+        /* ================= ADVISORY SESSIONS & BOOKINGS TAB ================= */
+        <div className="space-y-4">
+          {/* Metrics summary */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div className="p-4 rounded-xl bg-white border border-slate-200/90 shadow-xs">
+              <p className="text-[12px] font-semibold uppercase tracking-wider text-slate-500">Total Requests</p>
+              <p className="text-2xl font-black text-slate-900 mt-1">{bookings.length}</p>
+              <p className="text-[12px] text-slate-500 mt-0.5">Advisory 1:1 sessions</p>
+            </div>
+            <div className="p-4 rounded-xl bg-white border border-slate-200/90 shadow-xs">
+              <p className="text-[12px] font-semibold uppercase tracking-wider text-amber-600">Awaiting Action</p>
+              <p className="text-2xl font-black text-amber-700 mt-1">
+                {bookings.filter((b) => b.status === 'Requested').length}
+              </p>
+              <p className="text-[12px] text-slate-500 mt-0.5">Needs meeting link</p>
+            </div>
+            <div className="p-4 rounded-xl bg-white border border-slate-200/90 shadow-xs">
+              <p className="text-[12px] font-semibold uppercase tracking-wider text-blue-600">Scheduled / Confirmed</p>
+              <p className="text-2xl font-black text-blue-700 mt-1">
+                {bookings.filter((b) => b.status === 'Scheduled').length}
+              </p>
+              <p className="text-[12px] text-slate-500 mt-0.5">Active upcoming sessions</p>
+            </div>
+            <div className="p-4 rounded-xl bg-white border border-slate-200/90 shadow-xs">
+              <p className="text-[12px] font-semibold uppercase tracking-wider text-emerald-600">Completed</p>
+              <p className="text-2xl font-black text-emerald-700 mt-1">
+                {bookings.filter((b) => b.status === 'Completed').length}
+              </p>
+              <p className="text-[12px] text-slate-500 mt-0.5">Conducted 1:1 hours</p>
+            </div>
+          </div>
+
+          {/* Bookings List / Cards */}
+          {bookings.length === 0 ? (
+            <div className="p-12 text-center bg-white rounded-2xl border border-slate-200 shadow-xs">
+              <Calendar className="w-10 h-10 text-slate-300 mx-auto mb-2" />
+              <h3 className="font-bold text-slate-800 text-sm">No advisory sessions booked yet</h3>
+              <p className="text-xs text-slate-500 mt-1">
+                {isAdmin
+                  ? 'When startups request 1:1 sessions with empanelled mentors, they will appear here.'
+                  : 'Browse empanelled advisors and click "Request Office Hours" to book your 1:1 advisory session.'}
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {bookings.map((booking) => (
+                <div key={booking.id} className="p-5 bg-white rounded-xl border border-slate-200/90 shadow-xs space-y-3">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <div className="flex items-center space-x-2">
+                        <span className="font-mono text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                          {booking.reference_number || 'VB-MB'}
+                        </span>
+                        <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${
+                          booking.status === 'Requested'
+                            ? 'bg-amber-100 text-amber-800'
+                            : booking.status === 'Scheduled'
+                            ? 'bg-blue-100 text-blue-800'
+                            : booking.status === 'Completed'
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : 'bg-slate-100 text-slate-600'
+                        }`}>
+                          {booking.status}
+                        </span>
+                      </div>
+                      <h4 className="font-bold text-slate-900 text-sm mt-1.5">{booking.mentor_name}</h4>
+                      <p className="text-[11px] text-slate-500">{booking.mentor_organization}</p>
+                    </div>
+
+                    <div className="text-right">
+                      <span className="text-[11px] font-bold text-slate-800 block">{booking.startup_name}</span>
+                      <span className="text-[10px] text-slate-500">{booking.founder_name}</span>
+                    </div>
+                  </div>
+
+                  <div className="p-3 bg-slate-50 rounded-lg text-xs space-y-1.5 border border-slate-100">
+                    <div>
+                      <span className="text-[10px] font-bold uppercase text-slate-500">Discussion Challenge / Topic:</span>
+                      <p className="text-slate-800 font-medium mt-0.5">{booking.topic}</p>
+                    </div>
+                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-600 pt-1 border-t border-slate-200/60">
+                      <span><strong>Date:</strong> {booking.preferred_date}</span>
+                      <span><strong>Window:</strong> {booking.preferred_time_window}</span>
+                      <span><strong>Format:</strong> {booking.preferred_mode}</span>
+                    </div>
+                  </div>
+
+                  {booking.meeting_link && (
+                    <div className="p-2.5 bg-blue-50/70 border border-blue-200 rounded-lg flex items-center justify-between text-xs">
+                      <span className="text-blue-900 font-semibold flex items-center gap-1.5">
+                        <ExternalLink className="w-3.5 h-3.5 text-blue-700" />
+                        Meeting Invite:
+                      </span>
+                      <a
+                        href={booking.meeting_link}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-blue-700 hover:text-blue-900 font-bold underline truncate max-w-[200px]"
+                      >
+                        {booking.meeting_link}
+                      </a>
+                    </div>
+                  )}
+
+                  {booking.admin_notes && (
+                    <p className="text-[11px] text-slate-500 italic">Directorate Note: {booking.admin_notes}</p>
+                  )}
+
+                  {/* Admin Actions */}
+                  {isAdmin && (
+                    <div className="pt-2 border-t border-slate-100 flex items-center justify-end space-x-2">
+                      {booking.status === 'Requested' && (
+                        <button
+                          onClick={() => {
+                            setSelectedBookingForAction(booking);
+                            setActionMeetingLink(booking.meeting_link || '');
+                            setActionNotes(booking.admin_notes || '');
+                          }}
+                          className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs"
+                        >
+                          Confirm &amp; Set Link
+                        </button>
+                      )}
+                      {booking.status === 'Scheduled' && (
+                        <button
+                          onClick={() => handleUpdateBookingStatus(booking.id, 'Completed')}
+                          className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs"
+                        >
+                          Mark Completed
+                        </button>
+                      )}
+                      {booking.status !== 'Cancelled' && booking.status !== 'Completed' && (
+                        <button
+                          onClick={() => handleUpdateBookingStatus(booking.id, 'Cancelled')}
+                          className="px-2.5 py-1.5 rounded-lg text-rose-600 hover:bg-rose-50 font-semibold text-xs"
+                        >
+                          Cancel
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ================= ADMIN SCHEDULE / CONFIRM BOOKING MODAL ================= */}
+      {selectedBookingForAction && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 text-xs">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div>
+                <h3 className="font-bold text-slate-900 text-sm">Schedule Advisory Session</h3>
+                <p className="text-[11px] text-slate-500">
+                  {selectedBookingForAction.reference_number} • {selectedBookingForAction.startup_name} with {selectedBookingForAction.mentor_name}
+                </p>
+              </div>
+              <button
+                onClick={() => setSelectedBookingForAction(null)}
+                className="p-1 rounded text-slate-400 hover:text-slate-600"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="py-4 space-y-3.5">
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  Virtual Meeting Link (Google Meet / Zoom / Teams)
+                </label>
+                <input
+                  type="url"
+                  placeholder="https://meet.google.com/abc-defg-hij"
+                  value={actionMeetingLink}
+                  onChange={(e) => setActionMeetingLink(e.target.value)}
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-emerald-500 text-xs font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  Admin / Coordinator Notes
+                </label>
+                <textarea
+                  rows={2}
+                  placeholder="E.g., Confirmed with Dr. Radhika for Wednesday 11:30 AM IST."
+                  value={actionNotes}
+                  onChange={(e) => setActionNotes(e.target.value)}
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-emerald-500 text-xs"
+                />
+              </div>
+            </div>
+
+            <div className="pt-3 border-t border-slate-100 flex items-center justify-end space-x-2">
+              <button
+                onClick={() => setSelectedBookingForAction(null)}
+                className="px-4 py-2 rounded-lg border border-slate-200 font-semibold text-slate-600 hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                disabled={actionSubmitting}
+                onClick={() =>
+                  handleUpdateBookingStatus(
+                    selectedBookingForAction.id,
+                    'Scheduled',
+                    actionNotes,
+                    actionMeetingLink
+                  )
+                }
+                className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
+              >
+                {actionSubmitting ? 'Saving...' : 'Confirm & Schedule Session'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ================= DETAILS MODAL ================= */}
       {selectedMentor && (
@@ -562,7 +883,7 @@ export default function MentorDirectory({ isAdmin = false, currentUser }) {
               </div>
               <button
                 onClick={() => setSelectedMentor(null)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100"
+                className="p-1.5 rounded-lg text-slate-500 hover:text-slate-700 hover:bg-slate-100"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -570,7 +891,7 @@ export default function MentorDirectory({ isAdmin = false, currentUser }) {
 
             <div className="py-4 space-y-4 text-xs">
               <div>
-                <h4 className="font-bold text-slate-800 uppercase tracking-wider text-[11px] mb-1">
+                <h4 className="font-bold text-slate-800 uppercase tracking-wider text-[12px] mb-1">
                   Expertise &amp; Focus Area
                 </h4>
                 <span className="inline-block px-3 py-1 bg-emerald-50 text-emerald-800 font-bold rounded-lg border border-emerald-200">
@@ -579,7 +900,7 @@ export default function MentorDirectory({ isAdmin = false, currentUser }) {
               </div>
 
               <div>
-                <h4 className="font-bold text-slate-800 uppercase tracking-wider text-[11px] mb-1">
+                <h4 className="font-bold text-slate-800 uppercase tracking-wider text-[12px] mb-1">
                   Professional Biography
                 </h4>
                 <p className="text-slate-600 leading-relaxed whitespace-pre-line bg-slate-50 p-3 rounded-xl border border-slate-100">
@@ -588,7 +909,7 @@ export default function MentorDirectory({ isAdmin = false, currentUser }) {
               </div>
 
               <div>
-                <h4 className="font-bold text-slate-800 uppercase tracking-wider text-[11px] mb-1">
+                <h4 className="font-bold text-slate-800 uppercase tracking-wider text-[12px] mb-1">
                   Key Mentoring Topics
                 </h4>
                 <p className="text-slate-700 font-medium">
@@ -598,29 +919,29 @@ export default function MentorDirectory({ isAdmin = false, currentUser }) {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
                 <div className="p-3 rounded-lg border border-slate-100 bg-slate-50">
-                  <span className="text-[10px] text-slate-400 uppercase font-bold">Availability</span>
+                  <span className="text-[11px] text-slate-500 uppercase font-bold">Availability</span>
                   <p className="font-semibold text-slate-800 mt-0.5">{selectedMentor.availability}</p>
                 </div>
                 <div className="p-3 rounded-lg border border-slate-100 bg-slate-50">
-                  <span className="text-[10px] text-slate-400 uppercase font-bold">Mentoring Format</span>
+                  <span className="text-[11px] text-slate-500 uppercase font-bold">Mentoring Format</span>
                   <p className="font-semibold text-slate-800 mt-0.5">{selectedMentor.mentoring_format}</p>
                 </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="p-3 rounded-lg border border-slate-100 bg-slate-50">
-                  <span className="text-[10px] text-slate-400 uppercase font-bold">Official Email</span>
+                  <span className="text-[11px] text-slate-500 uppercase font-bold">Official Email</span>
                   <p className="font-semibold text-slate-800 mt-0.5 font-mono">{selectedMentor.email}</p>
                 </div>
                 <div className="p-3 rounded-lg border border-slate-100 bg-slate-50">
-                  <span className="text-[10px] text-slate-400 uppercase font-bold">Phone Number</span>
+                  <span className="text-[11px] text-slate-500 uppercase font-bold">Phone Number</span>
                   <p className="font-semibold text-slate-800 mt-0.5">{selectedMentor.phone || 'Available upon session booking'}</p>
                 </div>
               </div>
 
               {isAdmin && selectedMentor.internal_notes && (
                 <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-900">
-                  <span className="font-bold uppercase tracking-wider text-[10px] block mb-1">
+                  <span className="font-bold uppercase tracking-wider text-[11px] block mb-1">
                     Internal Staff Notes (Staff Only)
                   </span>
                   <p>{selectedMentor.internal_notes}</p>
@@ -681,7 +1002,7 @@ export default function MentorDirectory({ isAdmin = false, currentUser }) {
               </div>
               <button
                 onClick={() => setOfficeHoursModal(null)}
-                className="p-1 rounded text-slate-400 hover:text-slate-700"
+                className="p-1 rounded text-slate-500 hover:text-slate-700"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -692,45 +1013,79 @@ export default function MentorDirectory({ isAdmin = false, currentUser }) {
                 <div className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-700 mx-auto flex items-center justify-center">
                   <Check className="w-6 h-6" />
                 </div>
-                <h4 className="text-sm font-bold text-slate-800">Request Dispatched!</h4>
-                <p className="text-xs text-slate-500 max-w-sm mx-auto">
-                  The Incubation Office has routed your 1:1 mentorship request to {officeHoursModal.full_name}. You will receive a calendar invite shortly.
+                <h4 className="text-sm font-bold text-slate-800">Advisory Session Dispatched!</h4>
+                <div className="inline-block px-3 py-1 bg-emerald-50 border border-emerald-200 text-emerald-800 font-mono text-xs rounded-full font-bold">
+                  Reference: {officeHoursRef}
+                </div>
+                <p className="text-xs text-slate-500 max-w-sm mx-auto mt-2">
+                  The Incubation Office has received your advisory request with <strong>{officeHoursModal.full_name}</strong>. You will receive a calendar invite with the meeting link shortly.
                 </p>
+                <div className="pt-3">
+                  <button
+                    onClick={() => {
+                      setOfficeHoursSent(false);
+                      setOfficeHoursModal(null);
+                      setActiveTab('bookings');
+                    }}
+                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition"
+                  >
+                    View My Booked Sessions
+                  </button>
+                </div>
               </div>
             ) : (
               <form onSubmit={handleRequestOfficeHours} className="py-4 space-y-3.5 text-xs">
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">
-                    Specific Challenge or Topic for Discussion
+                    Specific Challenge or Topic for Discussion <span className="text-rose-500">*</span>
                   </label>
                   <textarea
                     required
                     rows={3}
-                    placeholder="E.g., Reviewing our provisional patent claim drafting and patent search report before filing..."
+                    value={bookingTopic}
+                    onChange={(e) => setBookingTopic(e.target.value)}
+                    placeholder="E.g., Reviewing our provisional patent claim drafting and SISFS Tranche 2 milestone criteria..."
                     className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-emerald-500 text-xs"
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
-                    <label className="block font-semibold text-slate-700 mb-1">Preferred Weekday</label>
-                    <select className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs">
-                      <option>Tuesday Afternoon</option>
-                      <option>Thursday Morning</option>
-                      <option>Friday Afternoon</option>
-                      <option>Saturday (Virtual only)</option>
+                    <label className="block font-semibold text-slate-700 mb-1">Preferred Date</label>
+                    <input
+                      type="date"
+                      required
+                      value={bookingDate}
+                      onChange={(e) => setBookingDate(e.target.value)}
+                      className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">Time Window</label>
+                    <select
+                      value={bookingTimeWindow}
+                      onChange={(e) => setBookingTimeWindow(e.target.value)}
+                      className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs"
+                    >
+                      <option>Morning (10 AM - 1 PM)</option>
+                      <option>Afternoon (2 PM - 5 PM)</option>
+                      <option>Evening (5 PM - 7 PM)</option>
                     </select>
                   </div>
                   <div>
                     <label className="block font-semibold text-slate-700 mb-1">Preferred Mode</label>
-                    <select className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs">
+                    <select
+                      value={bookingMode}
+                      onChange={(e) => setBookingMode(e.target.value)}
+                      className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs"
+                    >
                       <option>Virtual Video Conference</option>
                       <option>In-Person (Incubation Lab)</option>
                     </select>
                   </div>
                 </div>
 
-                <div className="p-3 bg-emerald-50/70 border border-emerald-100 rounded-lg text-[11px] text-emerald-900">
+                <div className="p-3 bg-emerald-50/70 border border-emerald-100 rounded-lg text-[12px] text-emerald-900">
                   <p>
                     <strong>Advisor Availability:</strong> {officeHoursModal.availability} • {officeHoursModal.mentoring_format}
                   </p>
@@ -746,9 +1101,10 @@ export default function MentorDirectory({ isAdmin = false, currentUser }) {
                   </button>
                   <button
                     type="submit"
-                    className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
+                    disabled={submittingBooking}
+                    className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold transition flex items-center space-x-1"
                   >
-                    Submit Request
+                    <span>{submittingBooking ? 'Submitting...' : 'Submit Session Request'}</span>
                   </button>
                 </div>
               </form>
@@ -767,7 +1123,7 @@ export default function MentorDirectory({ isAdmin = false, currentUser }) {
               </h3>
               <button
                 onClick={() => setIsFormOpen(false)}
-                className="p-1 rounded text-slate-400 hover:text-slate-700"
+                className="p-1 rounded text-slate-500 hover:text-slate-700"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -799,7 +1155,7 @@ export default function MentorDirectory({ isAdmin = false, currentUser }) {
                     className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-emerald-500 text-xs"
                   />
                   {formErrors.full_name && (
-                    <p className="text-rose-500 text-[10px] mt-1">{formErrors.full_name}</p>
+                    <p className="text-rose-500 text-[11px] mt-1">{formErrors.full_name}</p>
                   )}
                 </div>
 
@@ -815,7 +1171,7 @@ export default function MentorDirectory({ isAdmin = false, currentUser }) {
                     className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-emerald-500 text-xs"
                   />
                   {formErrors.designation && (
-                    <p className="text-rose-500 text-[10px] mt-1">{formErrors.designation}</p>
+                    <p className="text-rose-500 text-[11px] mt-1">{formErrors.designation}</p>
                   )}
                 </div>
               </div>
@@ -833,7 +1189,7 @@ export default function MentorDirectory({ isAdmin = false, currentUser }) {
                     className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-emerald-500 text-xs"
                   />
                   {formErrors.organization && (
-                    <p className="text-rose-500 text-[10px] mt-1">{formErrors.organization}</p>
+                    <p className="text-rose-500 text-[11px] mt-1">{formErrors.organization}</p>
                   )}
                 </div>
 
@@ -849,7 +1205,7 @@ export default function MentorDirectory({ isAdmin = false, currentUser }) {
                     className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-emerald-500 text-xs"
                   />
                   {formErrors.email && (
-                    <p className="text-rose-500 text-[10px] mt-1">{formErrors.email}</p>
+                    <p className="text-rose-500 text-[11px] mt-1">{formErrors.email}</p>
                   )}
                 </div>
               </div>
@@ -962,7 +1318,7 @@ export default function MentorDirectory({ isAdmin = false, currentUser }) {
                   className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-xs"
                 />
                 {formErrors.bio && (
-                  <p className="text-rose-500 text-[10px] mt-1">{formErrors.bio}</p>
+                  <p className="text-rose-500 text-[11px] mt-1">{formErrors.bio}</p>
                 )}
               </div>
 

@@ -23,7 +23,7 @@ export default function LoginForm({
   return (
     <form onSubmit={handleSubmit} className="space-y-3">
       {error && (
-        <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 flex items-start space-x-2 text-xs text-rose-800">
+        <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 flex items-start space-x-2 text-[0.75rem]/4 text-rose-800">
           <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
           <span>{error}</span>
         </div>
@@ -31,7 +31,7 @@ export default function LoginForm({
 
       {/* Email / Official Username */}
       <div>
-        <label className="block text-xs font-semibold text-slate-700 mb-1">
+        <label className="block text-[0.75rem]/4 font-semibold text-slate-700 mb-1">
           Official Email Address
         </label>
         <div className="relative">
@@ -44,7 +44,7 @@ export default function LoginForm({
             onChange={(e) => setEmail(e.target.value)}
             required
             placeholder={role === 'admin' ? 'director@incubator.in' : 'founder@startup.in'}
-            className="w-full pl-9 pr-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-600/20 focus:border-emerald-600 transition"
+            className="w-full pl-9 pr-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-[0.875rem]/5 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-600/20 focus:border-emerald-600 transition"
           />
         </div>
       </div>
@@ -52,13 +52,13 @@ export default function LoginForm({
       {/* Password */}
       <div>
         <div className="flex items-center justify-between mb-1">
-          <label className="text-xs font-semibold text-slate-700">
+          <label className="text-[0.75rem]/4 font-semibold text-slate-700">
             Portal Password
           </label>
           <button
             type="button"
             onClick={onOpenForgot}
-            className="text-xs text-emerald-700 hover:text-emerald-900 font-medium transition"
+            className="text-[0.75rem]/4 text-emerald-700 hover:text-emerald-900 font-medium transition"
           >
             Forgot password?
           </button>
@@ -73,7 +73,7 @@ export default function LoginForm({
             onChange={(e) => setPassword(e.target.value)}
             required
             placeholder="••••••••••••"
-            className="w-full pl-9 pr-10 py-2.5 bg-white border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-600/20 focus:border-emerald-600 transition"
+            className="w-full pl-9 pr-10 py-2.5 bg-white border border-slate-200 rounded-xl text-[0.875rem]/5 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-600/20 focus:border-emerald-600 transition"
           />
           <button
             type="button"
@@ -87,7 +87,7 @@ export default function LoginForm({
       </div>
 
       {/* Remember me & Security Info */}
-      <div className="flex flex-wrap items-center justify-between gap-2 text-xs pt-0.5">
+      <div className="flex flex-wrap items-center justify-between gap-2 text-[0.75rem]/4 pt-0.5">
         <label className="flex items-center space-x-2 text-slate-500 hover:text-slate-700 cursor-pointer">
           <input
             type="checkbox"
@@ -104,7 +104,7 @@ export default function LoginForm({
       <button
         type="submit"
         disabled={loading}
-        className="w-full mt-1.5 py-2.5 px-4 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-semibold text-sm flex items-center justify-center space-x-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+        className="w-full mt-1.5 py-2.5 px-4 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-semibold text-[0.875rem]/5 flex items-center justify-center space-x-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
       >
         {loading ? (
           <>

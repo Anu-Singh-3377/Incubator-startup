@@ -32,6 +32,8 @@ import MentorDirectory from './MentorDirectory';
 import VendorDirectory from './VendorDirectory';
 import GuidanceCenter from './GuidanceCenter';
 import SupportDesk from './SupportDesk';
+import { ChartCard, ProgressRing, WorkflowDiagram, ORDINAL_EMERALD } from './charts/Charts';
+import MilestoneTracker from './MilestoneTracker';
 
 export default function StartupDashboard({ user, onLogout }) {
   // Navigation tabs: 'overview' | 'guidance' | 'support' | 'investors' | 'mentors' | 'vendors'
@@ -42,9 +44,49 @@ export default function StartupDashboard({ user, onLogout }) {
   const [trancheModalOpen, setTrancheModalOpen] = useState(false);
   const [trancheSubmitted, setTrancheSubmitted] = useState(false);
 
+  // This founder's own portfolio record (read-only; RLS limits startups to their own row)
+  const [startupRecord, setStartupRecord] = useState(null);
+
   useEffect(() => {
     supabaseService.getAnnouncements().then(setAnnouncements);
-  }, []);
+    supabaseService
+      .getStartups()
+      .then((rows) => {
+        const own = (rows || []).find(
+          (s) => (user?.id && s.profile_id === user.id) || (user?.email && s.founder_email === user.email)
+        );
+        setStartupRecord(own || null);
+      })
+      .catch(() => setStartupRecord(null));
+  }, [user?.id, user?.email]);
+
+  // Count support tickets with an incubator reply the founder has not opened (same rule as the Support Desk)
+  const [unreadSupport, setUnreadSupport] = useState(0);
+  useEffect(() => {
+    const ownId = startupRecord?.id || user?.id;
+    if (!ownId) return;
+    const check = () =>
+      supabaseService
+        .getSupportTickets(ownId)
+        .then((rows) => {
+          const n = (rows || []).filter((t) => {
+            const replies = (t.responses || []).filter((r) => !r.is_internal);
+            const last = replies[replies.length - 1];
+            const role = last ? last.author_role || last.responder_role || '' : '';
+            if (!last || !(role === 'admin' || role.includes('Directorate'))) return false;
+            try {
+              return localStorage.getItem(`vb_ticket_seen_${t.id}`) !== String(replies.length);
+            } catch {
+              return false;
+            }
+          }).length;
+          setUnreadSupport(n);
+        })
+        .catch(() => {});
+    check();
+    const timer = setInterval(check, 30000);
+    return () => clearInterval(timer);
+  }, [startupRecord?.id, user?.id, activeNav]);
 
   const milestones = [
     { id: 1, name: 'Screening & Onboarding', status: 'completed', desc: 'DPIIT registration & AIC MoU signed' },
@@ -53,6 +95,22 @@ export default function StartupDashboard({ user, onLogout }) {
     { id: 4, name: 'Tranche 2 Disbursal', status: 'pending', desc: 'Milestone UC verification' },
     { id: 5, name: 'Cohort Demo Day', status: 'pending', desc: 'Pitching to angel networks' }
   ];
+
+  // Real figures from the linked record, falling back to the portal's default programme values
+  const sanctionedGrant = Number(startupRecord?.sanctioned_grant ?? 2500000) || 0;
+  const disbursedGrant = Number(startupRecord?.disbursed_grant ?? 1250000) || 0;
+  const remainingGrant = Math.max(sanctionedGrant - disbursedGrant, 0);
+  const disbursedPct = sanctionedGrant ? Math.round((disbursedGrant / sanctionedGrant) * 100) : 0;
+  const milestoneProgress = Number(startupRecord?.milestone_progress ?? 55) || 0;
+  const formatRupees = (n) => `₹${Number(n).toLocaleString('en-IN')}`;
+
+  // Seed grant split for the overview visual
+  const [hoverSegment, setHoverSegment] = useState(null);
+  const grantSegments = [
+    { label: 'Disbursed', value: disbursedGrant, color: ORDINAL_EMERALD[2] },
+    { label: 'Remaining to claim', value: remainingGrant, color: ORDINAL_EMERALD[0] }
+  ].filter((s) => s.value > 0);
+  const grantTotal = grantSegments.reduce((sum, s) => sum + s.value, 0);
 
   const currentDateFormatted = new Date().toLocaleDateString('en-IN', {
     weekday: 'long',
@@ -87,11 +145,11 @@ export default function StartupDashboard({ user, onLogout }) {
                 <h1 className="text-sm sm:text-base font-bold text-slate-900">
                   VentureBharat Incubation
                 </h1>
-                <span className="hidden sm:inline-flex text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-emerald-50 border border-emerald-200 text-emerald-700">
+                <span className="hidden sm:inline-flex text-[11px] font-bold uppercase px-2 py-0.5 rounded bg-emerald-50 border border-emerald-200 text-emerald-700">
                   Startup Innovator Portal
                 </span>
               </div>
-              <p className="text-[11px] text-slate-500 hidden sm:block">
+              <p className="text-[12px] text-slate-500 hidden sm:block">
                 Atal Incubation Centre (AIC) • Supported by Startup India &amp; DST
               </p>
             </div>
@@ -109,7 +167,7 @@ export default function StartupDashboard({ user, onLogout }) {
           <div className="flex items-center space-x-2.5 pl-2 border-l border-slate-200">
             <div className="hidden md:block text-right">
               <p className="text-xs font-bold text-slate-900">{user?.full_name || 'Aarav Sharma'}</p>
-              <p className="text-[11px] text-slate-500 font-mono">{user?.startup_name || 'KisanSetu DeepTech'}</p>
+              <p className="text-[12px] text-slate-500 font-mono">{user?.startup_name || 'KisanSetu DeepTech'}</p>
             </div>
             <button
               onClick={onLogout}
@@ -138,7 +196,7 @@ export default function StartupDashboard({ user, onLogout }) {
                 <p className="text-xs font-bold text-slate-900 truncate">
                   {user?.startup_name || 'KisanSetu DeepTech'}
                 </p>
-                <p className="text-[10px] text-emerald-700 font-medium">
+                <p className="text-[11px] text-emerald-700 font-medium">
                   {user?.cohort || 'Cohort 12 (Spring 2026)'}
                 </p>
               </div>
@@ -147,12 +205,13 @@ export default function StartupDashboard({ user, onLogout }) {
 
           {/* Navigation Links */}
           <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
-            <div className="px-3 pt-2 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+            <div className="px-3 pt-2 pb-1 text-[11px] font-bold uppercase tracking-wider text-slate-500">
               Venture Operations
             </div>
 
             <button
               onClick={() => setActiveNav('overview')}
+              aria-current={activeNav === 'overview' ? 'page' : undefined}
               className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-xs font-medium transition ${
                 activeNav === 'overview'
                   ? 'bg-emerald-50 text-emerald-800 font-bold border-l-4 border-emerald-600 shadow-xs'
@@ -165,6 +224,7 @@ export default function StartupDashboard({ user, onLogout }) {
 
             <button
               onClick={() => setActiveNav('guidance')}
+              aria-current={activeNav === 'guidance' ? 'page' : undefined}
               className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-xs font-medium transition ${
                 activeNav === 'guidance'
                   ? 'bg-emerald-50 text-emerald-800 font-bold border-l-4 border-emerald-600 shadow-xs'
@@ -177,6 +237,7 @@ export default function StartupDashboard({ user, onLogout }) {
 
             <button
               onClick={() => setActiveNav('support')}
+              aria-current={activeNav === 'support' ? 'page' : undefined}
               className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-xs font-medium transition ${
                 activeNav === 'support'
                   ? 'bg-emerald-50 text-emerald-800 font-bold border-l-4 border-emerald-600 shadow-xs'
@@ -185,14 +246,20 @@ export default function StartupDashboard({ user, onLogout }) {
             >
               <LifeBuoy className={`w-4 h-4 ${activeNav === 'support' ? 'text-emerald-700' : 'text-slate-500'}`} />
               <span>Help &amp; Support Desk</span>
+              {unreadSupport > 0 && (
+                <span className="ml-auto text-[11px] font-black bg-emerald-600 text-white px-2 py-0.5 rounded-full" title="New replies from the incubator">
+                  {unreadSupport}
+                </span>
+              )}
             </button>
 
-            <div className="pt-4 px-3 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+            <div className="pt-4 px-3 pb-1 text-[11px] font-bold uppercase tracking-wider text-slate-500">
               Ecosystem &amp; Network
             </div>
 
             <button
               onClick={() => setActiveNav('investors')}
+              aria-current={activeNav === 'investors' ? 'page' : undefined}
               className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-xs font-medium transition ${
                 activeNav === 'investors'
                   ? 'bg-emerald-50 text-emerald-800 font-bold border-l-4 border-emerald-600 shadow-xs'
@@ -205,6 +272,7 @@ export default function StartupDashboard({ user, onLogout }) {
 
             <button
               onClick={() => setActiveNav('mentors')}
+              aria-current={activeNav === 'mentors' ? 'page' : undefined}
               className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-xs font-medium transition ${
                 activeNav === 'mentors'
                   ? 'bg-emerald-50 text-emerald-800 font-bold border-l-4 border-emerald-600 shadow-xs'
@@ -217,6 +285,7 @@ export default function StartupDashboard({ user, onLogout }) {
 
             <button
               onClick={() => setActiveNav('vendors')}
+              aria-current={activeNav === 'vendors' ? 'page' : undefined}
               className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-xs font-medium transition ${
                 activeNav === 'vendors'
                   ? 'bg-emerald-50 text-emerald-800 font-bold border-l-4 border-emerald-600 shadow-xs'
@@ -234,6 +303,7 @@ export default function StartupDashboard({ user, onLogout }) {
           <div className="lg:hidden absolute top-0 left-0 right-0 z-30 bg-white border-b border-slate-200 p-4 space-y-2 text-xs shadow-lg">
             <button
               onClick={() => { setActiveNav('overview'); setMobileMenuOpen(false); }}
+              aria-current={activeNav === 'overview' ? 'page' : undefined}
               className={`w-full flex items-center space-x-2 p-2.5 rounded-lg ${activeNav === 'overview' ? 'bg-emerald-50 text-emerald-800 font-bold' : 'text-slate-600'}`}
             >
               <LayoutDashboard className="w-4 h-4 text-emerald-600" />
@@ -241,6 +311,7 @@ export default function StartupDashboard({ user, onLogout }) {
             </button>
             <button
               onClick={() => { setActiveNav('guidance'); setMobileMenuOpen(false); }}
+              aria-current={activeNav === 'guidance' ? 'page' : undefined}
               className={`w-full flex items-center space-x-2 p-2.5 rounded-lg ${activeNav === 'guidance' ? 'bg-emerald-50 text-emerald-800 font-bold' : 'text-slate-600'}`}
             >
               <Compass className="w-4 h-4 text-emerald-600" />
@@ -248,13 +319,20 @@ export default function StartupDashboard({ user, onLogout }) {
             </button>
             <button
               onClick={() => { setActiveNav('support'); setMobileMenuOpen(false); }}
+              aria-current={activeNav === 'support' ? 'page' : undefined}
               className={`w-full flex items-center space-x-2 p-2.5 rounded-lg ${activeNav === 'support' ? 'bg-emerald-50 text-emerald-800 font-bold' : 'text-slate-600'}`}
             >
               <LifeBuoy className="w-4 h-4 text-emerald-600" />
               <span>Help &amp; Support Desk</span>
+              {unreadSupport > 0 && (
+                <span className="ml-auto text-[11px] font-black bg-emerald-600 text-white px-2 py-0.5 rounded-full">
+                  {unreadSupport}
+                </span>
+              )}
             </button>
             <button
               onClick={() => { setActiveNav('investors'); setMobileMenuOpen(false); }}
+              aria-current={activeNav === 'investors' ? 'page' : undefined}
               className={`w-full flex items-center space-x-2 p-2.5 rounded-lg ${activeNav === 'investors' ? 'bg-emerald-50 text-emerald-800 font-bold' : 'text-slate-600'}`}
             >
               <TrendingUp className="w-4 h-4 text-emerald-600" />
@@ -262,6 +340,7 @@ export default function StartupDashboard({ user, onLogout }) {
             </button>
             <button
               onClick={() => { setActiveNav('mentors'); setMobileMenuOpen(false); }}
+              aria-current={activeNav === 'mentors' ? 'page' : undefined}
               className={`w-full flex items-center space-x-2 p-2.5 rounded-lg ${activeNav === 'mentors' ? 'bg-emerald-50 text-emerald-800 font-bold' : 'text-slate-600'}`}
             >
               <Users className="w-4 h-4 text-emerald-600" />
@@ -269,6 +348,7 @@ export default function StartupDashboard({ user, onLogout }) {
             </button>
             <button
               onClick={() => { setActiveNav('vendors'); setMobileMenuOpen(false); }}
+              aria-current={activeNav === 'vendors' ? 'page' : undefined}
               className={`w-full flex items-center space-x-2 p-2.5 rounded-lg ${activeNav === 'vendors' ? 'bg-emerald-50 text-emerald-800 font-bold' : 'text-slate-600'}`}
             >
               <Gift className="w-4 h-4 text-emerald-600" />
@@ -288,19 +368,19 @@ export default function StartupDashboard({ user, onLogout }) {
                 <div className="p-6 rounded-2xl bg-white border border-slate-200/90 shadow-xs relative overflow-hidden">
                   <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 relative z-10">
                     <div>
-                      <div className="inline-flex items-center space-x-2 px-3 py-0.5 rounded-full bg-emerald-50 text-[11px] font-semibold text-emerald-800 mb-2 border border-emerald-200">
+                      <div className="inline-flex items-center space-x-2 px-3 py-0.5 rounded-full bg-emerald-50 text-[12px] font-semibold text-emerald-800 mb-2 border border-emerald-200">
                         <Rocket className="w-3.5 h-3.5 text-emerald-600" />
-                        <span>{user?.cohort || 'Cohort 12 (Spring 2026)'}</span>
-                        <span className="text-slate-400">•</span>
+                        <span>{user?.cohort || startupRecord?.cohort || 'Cohort 12 (Spring 2026)'}</span>
+                        <span className="text-slate-500">•</span>
                         <span className="text-emerald-700 font-bold">Active Incubatee</span>
                       </div>
                       <h2 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
-                        {user?.startup_name || 'KisanSetu DeepTech Labs'}
+                        {user?.startup_name || startupRecord?.startup_name || 'KisanSetu DeepTech Labs'}
                       </h2>
                       <p className="text-xs sm:text-sm text-slate-600 mt-1 flex flex-wrap items-center gap-2">
-                        <span>DPIIT Recognition: <strong className="text-slate-900 font-mono">{user?.dpiit_number || 'DIPP-IN-98214'}</strong></span>
+                        <span>DPIIT Recognition: <strong className="text-slate-900 font-mono">{user?.dpiit_number || startupRecord?.dpiit_number || 'DIPP-IN-98214'}</strong></span>
                         <span className="text-slate-300">|</span>
-                        <span>Sector: <strong className="text-slate-900">{user?.sector || 'AgriTech & Edge AI'}</strong></span>
+                        <span>Sector: <strong className="text-slate-900">{user?.sector || startupRecord?.sector || 'AgriTech & Edge AI'}</strong></span>
                         <span className="text-slate-300">|</span>
                         <span>Founder: <strong className="text-slate-900">{user?.full_name || 'Aarav Sharma'}</strong></span>
                       </p>
@@ -325,9 +405,9 @@ export default function StartupDashboard({ user, onLogout }) {
                       <span className="font-semibold text-slate-600">Sanctioned Seed Grant</span>
                       <DollarSign className="w-4 h-4 text-emerald-600" />
                     </div>
-                    <div className="text-2xl font-black text-slate-900">₹25,00,000</div>
-                    <p className="text-[11px] text-emerald-700 mt-1 font-medium">
-                      Startup India Seed Fund Scheme (SISFS)
+                    <div className="text-2xl font-black text-slate-900">{formatRupees(sanctionedGrant)}</div>
+                    <p className="text-[12px] text-emerald-700 mt-1 font-medium">
+                      {startupRecord?.grant_scheme || 'Startup India Seed Fund Scheme (SISFS)'}
                     </p>
                   </div>
 
@@ -336,9 +416,9 @@ export default function StartupDashboard({ user, onLogout }) {
                       <span className="font-semibold text-slate-600">Disbursed to Date</span>
                       <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                     </div>
-                    <div className="text-2xl font-black text-emerald-700">₹12,50,000</div>
-                    <p className="text-[11px] text-slate-500 mt-1">
-                      Tranche 1 Cleared • 50% Disbursed
+                    <div className="text-2xl font-black text-emerald-700">{formatRupees(disbursedGrant)}</div>
+                    <p className="text-[12px] text-slate-500 mt-1">
+                      {disbursedPct}% of sanctioned grant disbursed
                     </p>
                   </div>
 
@@ -347,8 +427,8 @@ export default function StartupDashboard({ user, onLogout }) {
                       <span className="font-semibold text-slate-600">Assigned Expert Mentor</span>
                       <Compass className="w-4 h-4 text-blue-600" />
                     </div>
-                    <div className="text-lg font-bold text-slate-900 truncate">Dr. Radhika Iyer</div>
-                    <p className="text-[11px] text-blue-700 mt-1 font-medium">
+                    <div className="text-base font-bold text-slate-900 leading-snug line-clamp-2" title={startupRecord?.assigned_mentor || 'Dr. Radhika Iyer'}>{startupRecord?.assigned_mentor || 'Dr. Radhika Iyer'}</div>
+                    <p className="text-[12px] text-blue-700 mt-1 font-medium">
                       IIT Bombay Alum • Partner, Bharat Seed
                     </p>
                   </div>
@@ -358,63 +438,77 @@ export default function StartupDashboard({ user, onLogout }) {
                       <span className="font-semibold text-slate-600">Lab &amp; Cleanroom Allotment</span>
                       <Cpu className="w-4 h-4 text-purple-600" />
                     </div>
-                    <div className="text-lg font-bold text-slate-900 truncate">IoT Cleanroom Bay 4B</div>
-                    <p className="text-[11px] text-purple-700 mt-1 font-medium">
+                    <div className="text-base font-bold text-slate-900 leading-snug line-clamp-2" title={startupRecord?.lab_access || 'IoT Cleanroom Bay 4B'}>{startupRecord?.lab_access || 'IoT Cleanroom Bay 4B'}</div>
+                    <p className="text-[12px] text-purple-700 mt-1 font-medium">
                       24/7 Access Active • Biometric Enabled
                     </p>
                   </div>
                 </div>
 
-                {/* Milestone Lifecycle Tracker */}
-                <div className="p-6 rounded-xl bg-white border border-slate-200/90 shadow-xs">
-                  <div className="flex items-center justify-between mb-4">
-                    <div>
-                      <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                        <TrendingUp className="w-4 h-4 text-emerald-600" />
-                        <span>Incubation Lifecycle Milestones (AIC Framework)</span>
-                      </h3>
-                      <p className="text-xs text-slate-500 mt-0.5">
-                        Stage 2 of 5: Hardware Prototyping &amp; Edge AI Integration
-                      </p>
-                    </div>
-                    <span className="text-xs font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded">
-                      55% Completed
-                    </span>
-                  </div>
-
-                  {/* Progress Bar */}
-                  <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden mb-6 border border-slate-200">
-                    <div className="bg-gradient-to-r from-emerald-500 to-teal-600 h-full rounded-full transition-all duration-500" style={{ width: '55%' }} />
-                  </div>
-
-                  {/* Steps Grid */}
-                  <div className="grid grid-cols-1 sm:grid-cols-5 gap-3">
-                    {milestones.map((m) => {
-                      const isDone = m.status === 'completed';
-                      const isActive = m.status === 'active';
-                      return (
-                        <div
-                          key={m.id}
-                          className={`p-3.5 rounded-xl border text-left transition ${
-                            isDone
-                              ? 'bg-emerald-50/70 border-emerald-200 text-emerald-800'
-                              : isActive
-                              ? 'bg-white border-emerald-500 text-emerald-900 shadow-sm ring-2 ring-emerald-500/20'
-                              : 'bg-slate-50 border-slate-200 text-slate-400'
-                          }`}
-                        >
-                          <div className="flex items-center justify-between mb-1.5">
-                            <span className="text-[10px] font-mono font-bold">STAGE 0{m.id}</span>
-                            {isDone && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />}
-                            {isActive && <Clock className="w-3.5 h-3.5 text-emerald-600 animate-spin" />}
-                          </div>
-                          <p className="text-xs font-bold text-slate-900">{m.name}</p>
-                          <p className="text-[11px] text-slate-500 mt-1 leading-snug">{m.desc}</p>
+                {/* Interactive lifecycle, monthly reports and analytics (task_submissions in Supabase).
+                    The original static journey card is kept as the fallback. */}
+                <MilestoneTracker
+                  startupRecord={startupRecord}
+                  fallback={
+                    <ChartCard
+                      title="Incubation Lifecycle Journey (AIC Framework)"
+                      subtitle="Stage 2 of 5: Hardware Prototyping & Edge AI Integration"
+                      icon={TrendingUp}
+                    >
+                      <div className="flex flex-col lg:flex-row lg:items-center gap-5">
+                        <div className="flex lg:flex-col items-center gap-3 shrink-0">
+                          <ProgressRing value={milestoneProgress} label="completed" />
+                          <p className="text-[12px] text-slate-500 lg:text-center max-w-[140px]">
+                            {milestones.filter((m) => m.status === 'completed').length} of {milestones.length} stages cleared
+                          </p>
                         </div>
-                      );
-                    })}
+                        <div className="flex-1 min-w-0">
+                          <WorkflowDiagram
+                            steps={milestones.map((m) => ({
+                              title: m.name,
+                              desc: m.desc,
+                              metric: `0${m.id}`,
+                              icon: m.status === 'completed' ? CheckCircle2 : m.status === 'active' ? Clock : Layers,
+                              state: m.status === 'completed' ? 'done' : m.status === 'active' ? 'active' : 'pending'
+                            }))}
+                          />
+                        </div>
+                      </div>
+                    </ChartCard>
+                  }
+                />
+
+                {/* What this portal does: navigation map */}
+                <ChartCard
+                  title="Your Incubation Toolkit"
+                  subtitle="What this portal helps you do. Click any area to open it."
+                  icon={Sparkles}
+                >
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                    {[
+                      { key: 'guidance', label: 'Guidance Center', desc: 'Playbooks & expert advice', Icon: Compass },
+                      { key: 'mentors', label: 'Mentor Roster', desc: 'Book 1:1 sessions', Icon: Users },
+                      { key: 'investors', label: 'Investor Network', desc: 'Angels & VCs', Icon: TrendingUp },
+                      { key: 'vendors', label: 'Partner Perks', desc: 'Credits & discounts', Icon: Gift },
+                      { key: 'support', label: 'Support Desk', desc: 'Raise a ticket', Icon: LifeBuoy }
+                    ].map(({ key, label, desc, Icon }) => (
+                      <button
+                        key={key}
+                        onClick={() => setActiveNav(key)}
+                        className="p-3 rounded-xl border border-slate-200 bg-slate-50 hover:bg-white hover:border-emerald-400 hover:shadow-sm text-left transition group"
+                      >
+                        <span className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center mb-2 group-hover:scale-105 transition">
+                          <Icon className="w-4 h-4" />
+                        </span>
+                        <p className="text-xs font-bold text-slate-900 flex items-center gap-1">
+                          {label}
+                          <ArrowUpRight className="w-3 h-3 text-slate-500 group-hover:text-emerald-600" />
+                        </p>
+                        <p className="text-[12px] text-slate-500 mt-0.5">{desc}</p>
+                      </button>
+                    ))}
                   </div>
-                </div>
+                </ChartCard>
 
                 {/* Two-Column Grid: Grant Details + Announcements */}
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -425,25 +519,76 @@ export default function StartupDashboard({ user, onLogout }) {
                         <Shield className="w-4 h-4 text-emerald-600" />
                         <span>Startup India Seed Fund Scheme (SISFS) Tranches</span>
                       </h3>
-                      <span className="text-xs text-slate-400 font-mono">DPIIT Portal Synchronized</span>
+                      <span className="text-xs text-slate-500 font-mono">DPIIT Portal Synchronized</span>
                     </div>
+
+                    {/* Grant split visual */}
+                    {grantTotal === 0 ? (
+                      <p className="py-3 text-center text-xs text-slate-500 bg-slate-50 rounded-lg border border-dashed border-slate-200">
+                        No seed grant has been sanctioned for your venture yet.
+                      </p>
+                    ) : (
+                    <div>
+                      <p className="text-xs text-slate-600 mb-2">
+                        <strong className="text-slate-900">{formatRupees(disbursedGrant)}</strong> received of{' '}
+                        <strong className="text-slate-900">{formatRupees(sanctionedGrant)}</strong> sanctioned
+                      </p>
+                      <div
+                        className="flex h-3 w-full gap-[2px] rounded-full overflow-hidden"
+                        role="img"
+                        aria-label={`${disbursedPct}% of seed grant disbursed`}
+                      >
+                        {grantSegments.map((seg) => (
+                          <div
+                            key={seg.label}
+                            onMouseEnter={() => setHoverSegment(seg.label)}
+                            onMouseLeave={() => setHoverSegment(null)}
+                            className="h-full transition-all duration-300 cursor-default"
+                            style={{
+                              width: `${(seg.value / grantTotal) * 100}%`,
+                              background: seg.color,
+                              opacity: hoverSegment && hoverSegment !== seg.label ? 0.4 : 1
+                            }}
+                          />
+                        ))}
+                      </div>
+                      <div className="flex flex-wrap items-center justify-between gap-2 mt-2 text-[12px]">
+                        {grantSegments.map((seg) => (
+                          <span
+                            key={seg.label}
+                            onMouseEnter={() => setHoverSegment(seg.label)}
+                            onMouseLeave={() => setHoverSegment(null)}
+                            className={`flex items-center gap-1.5 px-1.5 py-0.5 rounded transition ${
+                              hoverSegment === seg.label ? 'bg-slate-100' : ''
+                            }`}
+                          >
+                            <span className="w-2.5 h-2.5 rounded-sm" style={{ background: seg.color }} />
+                            <span className="text-slate-600">{seg.label}</span>
+                            <strong className="text-slate-900">
+                              ₹{(seg.value / 100000).toFixed(1)} L ({Math.round((seg.value / grantTotal) * 100)}%)
+                            </strong>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                    )}
 
                     <div className="space-y-3">
                       <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-between text-xs">
                         <div>
                           <div className="flex items-center gap-2">
                             <span className="font-bold text-slate-900">Tranche 1 (Advance for Prototyping)</span>
-                            <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
                               Disbursed
                             </span>
                           </div>
-                          <p className="text-slate-500 text-[11px] mt-0.5">
+                          <p className="text-slate-500 text-[12px] mt-0.5">
                             Disbursed on 15 Feb 2026 via PFMS Direct Benefit Transfer
                           </p>
                         </div>
                         <div className="text-right">
                           <span className="font-bold text-slate-900 text-sm">₹12,50,000</span>
-                          <p className="text-[10px] text-emerald-600 font-semibold">Cleared</p>
+                          <p className="text-[11px] text-emerald-600 font-semibold">Cleared</p>
                         </div>
                       </div>
 
@@ -451,11 +596,11 @@ export default function StartupDashboard({ user, onLogout }) {
                         <div>
                           <div className="flex items-center gap-2">
                             <span className="font-bold text-slate-900">Tranche 2 (Field Trial &amp; IP Filing)</span>
-                            <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                            <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-300">
                               Eligible to Claim
                             </span>
                           </div>
-                          <p className="text-slate-600 text-[11px] mt-0.5">
+                          <p className="text-slate-600 text-[12px] mt-0.5">
                             Requires Utilization Certificate (UC) &amp; Milestone Review
                           </p>
                         </div>
@@ -463,7 +608,7 @@ export default function StartupDashboard({ user, onLogout }) {
                           <span className="font-bold text-emerald-800 text-sm">₹12,50,000</span>
                           <button
                             onClick={() => setTrancheModalOpen(true)}
-                            className="block text-[11px] text-emerald-700 font-semibold hover:underline mt-0.5"
+                            className="block text-[12px] text-emerald-700 font-semibold hover:underline mt-0.5"
                           >
                             Submit UC
                           </button>
@@ -481,7 +626,7 @@ export default function StartupDashboard({ user, onLogout }) {
                           <Calendar className="w-4 h-4 text-blue-600" />
                           <span className="font-medium text-slate-700">Schedule Mentor 1:1</span>
                         </div>
-                        <ArrowUpRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-700" />
+                        <ArrowUpRight className="w-3.5 h-3.5 text-slate-500 group-hover:text-slate-700" />
                       </button>
 
                       <button
@@ -492,7 +637,7 @@ export default function StartupDashboard({ user, onLogout }) {
                           <Gift className="w-4 h-4 text-emerald-600" />
                           <span className="font-medium text-slate-700">Explore Partner Perks</span>
                         </div>
-                        <ArrowUpRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-700" />
+                        <ArrowUpRight className="w-3.5 h-3.5 text-slate-500 group-hover:text-slate-700" />
                       </button>
                     </div>
                   </div>
@@ -504,22 +649,22 @@ export default function StartupDashboard({ user, onLogout }) {
                         <Bell className="w-4 h-4 text-emerald-600" />
                         <span>Directorate Noticeboard</span>
                       </h3>
-                      <span className="text-[11px] text-slate-500 font-medium">Live Broadcasts</span>
+                      <span className="text-[12px] text-slate-500 font-medium">Live Broadcasts</span>
                     </div>
 
                     <div className="space-y-3">
                       {announcements.map((anc) => (
                         <div key={anc.id} className="p-3 bg-slate-50 rounded-lg border border-slate-200 text-xs">
                           <div className="flex items-center justify-between mb-1">
-                            <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
                               {anc.category}
                             </span>
-                            <span className="text-[10px] text-slate-400 font-mono">
+                            <span className="text-[11px] text-slate-500 font-mono">
                               {new Date(anc.created_at).toLocaleDateString()}
                             </span>
                           </div>
                           <h4 className="font-bold text-slate-900 text-xs">{anc.title}</h4>
-                          <p className="text-[11px] text-slate-600 mt-1 leading-relaxed">{anc.content}</p>
+                          <p className="text-[12px] text-slate-600 mt-1 leading-relaxed">{anc.content}</p>
                         </div>
                       ))}
                     </div>
@@ -535,7 +680,17 @@ export default function StartupDashboard({ user, onLogout }) {
 
             {/* VIEW 3: HELP & SUPPORT DESK */}
             {activeNav === 'support' && (
-              <SupportDesk isAdmin={false} currentUser={user} />
+              <SupportDesk
+                isAdmin={false}
+                currentUser={{
+                  ...user,
+                  startup_id: startupRecord?.id || user?.id,
+                  startup_name: startupRecord?.startup_name || user?.organization || 'Innovative Labs Bharat',
+                  full_name: startupRecord?.founder_name || user?.full_name,
+                  email: startupRecord?.founder_email || user?.email,
+                  phone: startupRecord?.founder_phone || user?.phone
+                }}
+              />
             )}
 
             {/* VIEW 4: INVESTOR NETWORK */}

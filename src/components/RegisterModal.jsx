@@ -98,13 +98,13 @@ export default function RegisterModal({ isOpen, onClose, onRegisterSuccess }) {
           <h2 className="text-xl font-bold text-slate-900 tracking-tight">
             Register with VentureBharat Incubation
           </h2>
-          <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+          <p className="text-[0.75rem]/4 text-slate-500 mt-1 leading-relaxed">
             Apply for seed grant funding, deeptech lab facilities, and dedicated mentoring under AIM &amp; DST national schemes.
           </p>
         </div>
 
         {error && (
-          <div className="mb-3 p-2.5 rounded-xl bg-rose-50 border border-rose-200 flex items-start space-x-2 text-xs text-rose-800 shrink-0">
+          <div className="mb-3 p-2.5 rounded-xl bg-rose-50 border border-rose-200 flex items-start space-x-2 text-[0.75rem]/4 text-rose-800 shrink-0">
             <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-600" />
             <span>{error}</span>
           </div>
@@ -118,7 +118,7 @@ export default function RegisterModal({ isOpen, onClose, onRegisterSuccess }) {
             <h3 className="text-base font-bold text-slate-900">
               Application &amp; Registration Submitted!
             </h3>
-            <p className="text-xs text-slate-600 max-w-md mx-auto leading-relaxed">
+            <p className="text-[0.75rem]/4 text-slate-600 max-w-md mx-auto leading-relaxed">
               {successInfo}
             </p>
             <button
@@ -127,7 +127,7 @@ export default function RegisterModal({ isOpen, onClose, onRegisterSuccess }) {
                 setSuccessInfo(null);
                 onClose();
               }}
-              className="mt-3 px-5 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-xl shadow-xs transition"
+              className="mt-3 px-5 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-[0.75rem]/4 rounded-xl shadow-xs transition"
             >
               Return to Sign In
             </button>
@@ -136,10 +136,10 @@ export default function RegisterModal({ isOpen, onClose, onRegisterSuccess }) {
           <form onSubmit={handleSubmit} className="space-y-3.5 overflow-y-auto pr-1">
           {/* Role selector */}
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+            <label className="block text-[0.75rem]/4 font-semibold text-slate-700 mb-1.5">
               Registration Category
             </label>
-            <div className="grid grid-cols-2 gap-2 p-1 bg-slate-100/80 rounded-xl border border-slate-200 text-xs font-semibold">
+            <div className="grid grid-cols-2 gap-2 p-1 bg-slate-100/80 rounded-xl border border-slate-200 text-[0.75rem]/4 font-semibold">
               <button
                 type="button"
                 onClick={() => setFormData({ ...formData, role: 'founder' })}
@@ -170,7 +170,7 @@ export default function RegisterModal({ isOpen, onClose, onRegisterSuccess }) {
           {/* Name & Email */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
+              <label className="block text-[0.75rem]/4 font-semibold text-slate-700 mb-1">
                 Full Name
               </label>
               <div className="relative">
@@ -181,13 +181,13 @@ export default function RegisterModal({ isOpen, onClose, onRegisterSuccess }) {
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   placeholder="e.g. Aarav Sharma"
-                  className="w-full pl-9 pr-3 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-600/20 focus:border-emerald-600"
+                  className="w-full pl-9 pr-3 py-2 bg-white border border-slate-200 rounded-xl text-[0.75rem]/4 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-600/20 focus:border-emerald-600"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
+              <label className="block text-[0.75rem]/4 font-semibold text-slate-700 mb-1">
                 Official Email Address
               </label>
               <div className="relative">
@@ -198,7 +198,7 @@ export default function RegisterModal({ isOpen, onClose, onRegisterSuccess }) {
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                   placeholder="name@startup.in"
-                  className="w-full pl-9 pr-3 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-600/20 focus:border-emerald-600"
+                  className="w-full pl-9 pr-3 py-2 bg-white border border-slate-200 rounded-xl text-[0.75rem]/4 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-600/20 focus:border-emerald-600"
                 />
               </div>
             </div>
@@ -207,7 +207,7 @@ export default function RegisterModal({ isOpen, onClose, onRegisterSuccess }) {
           {/* Phone & Venture Name */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
+              <label className="block text-[0.75rem]/4 font-semibold text-slate-700 mb-1">
                 Mobile Number (+91)
               </label>
               <div className="relative">
@@ -218,13 +218,13 @@ export default function RegisterModal({ isOpen, onClose, onRegisterSuccess }) {
                   value={formData.phone}
                   onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                   placeholder="+91 98765 43210"
-                  className="w-full pl-9 pr-3 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-600/20 focus:border-emerald-600"
+                  className="w-full pl-9 pr-3 py-2 bg-white border border-slate-200 rounded-xl text-[0.75rem]/4 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-600/20 focus:border-emerald-600"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
+              <label className="block text-[0.75rem]/4 font-semibold text-slate-700 mb-1">
                 Startup / Venture Name
               </label>
               <div className="relative">
@@ -235,7 +235,7 @@ export default function RegisterModal({ isOpen, onClose, onRegisterSuccess }) {
                   value={formData.startupName}
                   onChange={(e) => setFormData({ ...formData, startupName: e.target.value })}
                   placeholder="e.g. AgriSense Robotics"
-                  className="w-full pl-9 pr-3 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-600/20 focus:border-emerald-600"
+                  className="w-full pl-9 pr-3 py-2 bg-white border border-slate-200 rounded-xl text-[0.75rem]/4 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-600/20 focus:border-emerald-600"
                 />
               </div>
             </div>
@@ -244,13 +244,13 @@ export default function RegisterModal({ isOpen, onClose, onRegisterSuccess }) {
           {/* Sector & DPIIT */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
+              <label className="block text-[0.75rem]/4 font-semibold text-slate-700 mb-1">
                 Primary Innovation Sector
               </label>
               <select
                 value={formData.sector}
                 onChange={(e) => setFormData({ ...formData, sector: e.target.value })}
-                className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-600/20 focus:border-emerald-600"
+                className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-[0.75rem]/4 text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-600/20 focus:border-emerald-600"
               >
                 {sectors.map((s) => (
                   <option key={s} value={s}>{s}</option>
@@ -259,7 +259,7 @@ export default function RegisterModal({ isOpen, onClose, onRegisterSuccess }) {
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
+              <label className="block text-[0.75rem]/4 font-semibold text-slate-700 mb-1">
                 DPIIT Number <span className="text-slate-400 font-normal">(Optional)</span>
               </label>
               <input
@@ -267,7 +267,7 @@ export default function RegisterModal({ isOpen, onClose, onRegisterSuccess }) {
                 value={formData.dpiitNumber}
                 onChange={(e) => setFormData({ ...formData, dpiitNumber: e.target.value })}
                 placeholder="DIPP-XXXXX or leave blank"
-                className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-600/20 focus:border-emerald-600"
+                className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-[0.75rem]/4 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-600/20 focus:border-emerald-600"
               />
             </div>
           </div>
@@ -275,7 +275,7 @@ export default function RegisterModal({ isOpen, onClose, onRegisterSuccess }) {
           {/* Password & Confirm Password */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
+              <label className="block text-[0.75rem]/4 font-semibold text-slate-700 mb-1">
                 Set Password
               </label>
               <div className="relative">
@@ -286,13 +286,13 @@ export default function RegisterModal({ isOpen, onClose, onRegisterSuccess }) {
                   value={formData.password}
                   onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                   placeholder="Min 6 characters"
-                  className="w-full pl-9 pr-3 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-600/20 focus:border-emerald-600"
+                  className="w-full pl-9 pr-3 py-2 bg-white border border-slate-200 rounded-xl text-[0.75rem]/4 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-600/20 focus:border-emerald-600"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
+              <label className="block text-[0.75rem]/4 font-semibold text-slate-700 mb-1">
                 Confirm Password
               </label>
               <div className="relative">
@@ -303,7 +303,7 @@ export default function RegisterModal({ isOpen, onClose, onRegisterSuccess }) {
                   value={formData.confirmPassword}
                   onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
                   placeholder="Re-type password"
-                  className="w-full pl-9 pr-3 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-600/20 focus:border-emerald-600"
+                  className="w-full pl-9 pr-3 py-2 bg-white border border-slate-200 rounded-xl text-[0.75rem]/4 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-600/20 focus:border-emerald-600"
                 />
               </div>
             </div>
@@ -321,7 +321,7 @@ export default function RegisterModal({ isOpen, onClose, onRegisterSuccess }) {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-2.5 px-4 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-semibold text-xs shadow-md shadow-emerald-700/20 flex items-center justify-center space-x-2 transition-all disabled:opacity-50"
+            className="w-full py-2.5 px-4 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-semibold text-[0.75rem]/4 shadow-md shadow-emerald-700/20 flex items-center justify-center space-x-2 transition-all disabled:opacity-50"
           >
             {loading ? (
               <>
